@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RAG Question Answering</title>
+</head>
+<body>
+    <h1>RAG Question Answering</h1>
+    
+    <form id="ragForm">
+        <input type="file" id="pdfFile" name="file" accept=".pdf" required><br><br>
+        <input type="text" id="queryInput" name="query" placeholder="Enter your question" required><br><br>
+        <input type="submit" value="Submit">
+    </form>
+
+    <div id="resultSection" style="display: none;">
+        <h2>Answer:</h2>
+        <p id="resultText"></p>
+    </div>
+
+    <script>
+        const API_BASE = "http://127.0.0.1:8001/rag";
+
+        document.getElementById('ragForm').addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevents traditional page reload
+
+            const fileInput = document.getElementById('pdfFile');
+            const queryInput = document.getElementById('queryInput');
+            const resultSection = document.getElementById('resultSection');
+            const resultText = document.getElementById('resultText');
+
+            resultSection.style.display = 'block';
+            resultText.innerText = "Processing document and generating answer...";
+
+            try {
+                // Step 1: Upload and Index the PDF
+                const formData = new FormData();
+                formData.append("file", fileInput.files[0]);
+
+                const uploadRes = await fetch(`${API_BASE}/upload`, {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!uploadRes.ok) {
+                    const errData = await uploadRes.json();
+                    throw new Error(errData.detail || "PDF upload failed");
+                }
+
+                // Step 2: Ask the question
+                const askRes = await fetch(`${API_BASE}/ask`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: queryInput.value })
+                });
+
+                const askData = await askRes.json();
+
+                if (!askRes.ok) {
+                    throw new Error(askData.detail || "Query failed");
+                }
+
+                // Step 3: Display result
+                resultText.innerText = askData.answer;
+
+            } catch (err) {
+                resultText.innerText = `Error: ${err.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
