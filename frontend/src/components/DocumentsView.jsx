@@ -1,18 +1,46 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, FileText, MessageCircle, Trash2, Upload } from 'lucide-react';
 import { FolioShell, Surface } from './FolioShell';
-import { uploadPdf } from '../api';
+import { uploadPdf, fetchDocuments, deleteDocument } from '../api'; 
+
+
 
 export function DocumentsView({ onNavigate, onLogout }) {
   const [documents, setDocuments] = useState([]);
   const [notice, setNotice] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const fileInputRef = useRef(null);
 
   const announce = (message) => {
     setNotice(message);
     window.setTimeout(() => setNotice(''), 2800);
   };
+
+
+// 1. Load existing documents from MongoDB when component mounts
+  useEffect(() => {
+    const loadSavedDocuments = async () => {
+      try {
+        const data = await fetchDocuments();
+        // Map backend schema to UI format
+        const formattedDocs = data.map((doc, idx) => ({
+          id: doc._id || `${idx}-${Date.now()}`,
+          name: doc.filename,
+          date: doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'Previously uploaded',
+          size: `${doc.total_chunks} chunks indexed`,
+        }));
+        setDocuments(formattedDocs);
+      } catch (err) {
+        announce('Failed to load document library.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSavedDocuments();
+  }, []);
+
 
   const uploadDocument = async (file) => {
     if (!file) return;
@@ -32,7 +60,7 @@ export function DocumentsView({ onNavigate, onLogout }) {
           date: 'Today',
           size: `${result.total_chunks} chunks indexed`,
         },
-        ...current,
+        ...current.filter((doc) => doc.name !== result.filename),
       ]);
       announce(result.message || `${result.filename} is ready in your library.`);
     } catch (err) {
@@ -101,7 +129,7 @@ export function DocumentsView({ onNavigate, onLogout }) {
                 <div className="folio-meta">
                   {document.date}
                   <span aria-hidden="true" style={{ margin: '0 10px' }}>
-                    ·
+                  
                   </span>
                   {document.size}
                 </div>
@@ -111,9 +139,14 @@ export function DocumentsView({ onNavigate, onLogout }) {
                 className="folio-icon-button"
                 aria-label={`Delete ${document.name}`}
                 data-testid={`button-delete-${document.id}`}
-                onClick={() => {
-                  setDocuments((current) => current.filter((item) => item.id !== document.id));
-                  announce(`${document.name} removed from your library.`);
+                onClick={async () => {
+                  try {
+                    await deleteDocument(document.name);
+                    setDocuments((current) => current.filter((item) => item.id !== document.id));
+                    announce(`${document.name} removed from your library.`);
+                  } catch (err) {
+                    announce(err.message || 'Failed to delete document.');
+                  }
                 }}
               >
                 <Trash2 size={18} strokeWidth={1.8} />

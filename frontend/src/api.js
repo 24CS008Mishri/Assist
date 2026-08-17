@@ -1,6 +1,12 @@
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001';
 
+export async function fetchDocuments() {
+  const res = await fetch(`${BASE_URL}/rag/documents`);
+  if (!res.ok) throw new Error("Failed to fetch documents");
+  return res.json();
+}
+
 export async function uploadPdf(file) {
   const formData = new FormData();
   formData.append('file', file);
@@ -17,4 +23,15 @@ export async function askQuestion(query) {
   });
   if (!res.ok) throw new Error((await res.json()).detail || 'Ask failed');
   return res.json(); // { query, answer }
+}
+
+export async function deleteDocument(filename) {
+  const res = await fetch(`${BASE_URL}/rag/documents/${encodeURIComponent(filename)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || "Failed to delete document");
+  }
+  return res.json();
 }

@@ -7,6 +7,8 @@ from langchain_mongodb import MongoDBAtlasVectorSearch
 from langchain_groq import ChatGroq
 
 from backend.data.database import get_collection
+from backend.services.document_service import is_document_indexed, register_document
+
 
 load_dotenv()
 
@@ -17,7 +19,8 @@ def get_llm() -> ChatGroq:
 
     return ChatGroq(
         groq_api_key=groq_key,
-        model_name="llama-3.1-8b-instant"
+        model_name="llama-3.1-8b-instant",
+        temperature=0.2
     )
 
 
@@ -35,14 +38,22 @@ def get_vectorstore() -> MongoDBAtlasVectorSearch:
     )
 
 
-def process_and_store_pdf(text: str) -> int:
+def process_and_store_pdf(text: str, filename: str) -> int:
+    # 1. Deduplication check via document_service
+    existing_chunks = is_document_indexed(filename)
+    if existing_chunks is not None:
+        return existing_chunks
+    
     """Chunks the text and stores vectors in MongoDB Atlas."""
-    document = Document(page_content=text)
+
+    document = Document(page_content=text, metadata={"source": filename})
+
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     chunks = text_splitter.split_documents([document])
 
     vectorstore = get_vectorstore()
     vectorstore.add_documents(chunks)
+    register_document(filename, len(chunks))
     return len(chunks)
 
 
@@ -55,10 +66,19 @@ def answer_question(query: str) -> str:
     if not docs:
         return "I could not find relevant information in the indexed documents."
 
-    context = "\n\n".join(doc.page_content for doc in docs if getattr(doc, "page_content", ""))
+    # Format context blocks with source document names
+    context_blocks = []
+    for doc in docs:
+        source_name = doc.metadata.get("source", "Unknown Document")
+        content = getattr(doc, "page_content", "").strip()
+        if content:
+            context_blocks.append(f"[Source: {source_name}]\n{content}")
+
+    formatted_context = "\n\n---\n\n".join(context_blocks)
+
     prompt = (
         "You are a helpful assistant. Answer the user's question using the provided context.\n\n"
-        f"Context:\n{context}\n\n"
+        f"Context:\n{formatted_context}\n\n"
         f"Question: {query}\n\n"
         "Answer:"
     )

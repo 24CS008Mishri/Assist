@@ -1,5 +1,4 @@
-import fitz  # PyMuPDF
-
+import pymupdf
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     """Extract text content from PDF file bytes."""
@@ -7,7 +6,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
         raise ValueError("PDF content is empty")
 
     # Open PDF from bytes stream
-    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    doc = pymupdf.open(stream=file_bytes, filetype="pdf")
     text_parts = []
 
     for page in doc:
