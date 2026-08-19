@@ -1,56 +1,82 @@
+from typing import Any, Dict, List
+
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from typing import List, Dict, Any
 
-from backend.models.schemas import QAResponse, QuestionRequest, UploadResponse
+from backend.models.schemas import (
+    AssistantRequest,
+    AssistantResponse,
+    DocumentRecord,
+    QAResponse,
+    QuestionRequest,
+    UploadResponse,
+)
+from backend.services.document_service import delete_document, get_all_documents
 from backend.services.pdf_service import extract_text_from_pdf
-from backend.services.document_service import get_all_documents, delete_document
-from backend.services.rag_service import answer_question as generate_answer, process_and_store_pdf
+from backend.services.rag_service import answer_question, process_and_store_pdf
 
 
-router = APIRouter(prefix="/rag", tags=["rag"])
+router = APIRouter(tags=["rag"])
 
-@router.get("/documents", response_model=List[Dict[str, Any]])
+
+@router.get("/rag/documents", response_model=List[DocumentRecord])
+@router.get("/api/documents", response_model=List[DocumentRecord])
 async def list_documents():
-    """Returns the list of all indexed documents for the frontend workspace."""
     return get_all_documents()
 
-@router.delete("/documents/{filename}")
-async def delete_document_endpoint(filename: str):
-    """Deletes a document and its embeddings from MongoDB Atlas."""
-    success = delete_document(filename)
-    if not success:
+
+@router.delete("/rag/documents/{filename}")
+@router.delete("/api/documents/{filename}")
+async def delete_document_endpoint(filename: str) -> Dict[str, str]:
+    if not delete_document(filename):
         raise HTTPException(status_code=404, detail="Document not found")
     return {"message": f"Successfully deleted {filename}"}
 
 
-@router.post("/upload", response_model=UploadResponse)
+@router.post("/rag/upload", response_model=UploadResponse)
+@router.post("/api/documents/upload", response_model=UploadResponse)
 async def upload_pdf(file: UploadFile = File(...)) -> UploadResponse:
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
-    file_bytes = await file.read()
-
     try:
-        text = extract_text_from_pdf(file_bytes)
-        total_chunks = process_and_store_pdf(text,file.filename)
+        text = extract_text_from_pdf(await file.read())
+        total_chunks, already_indexed = process_and_store_pdf(text, file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return UploadResponse(
         filename=file.filename,
-        message="PDF uploaded and indexed successfully",
+        message="PDF already indexed" if already_indexed else "PDF uploaded and indexed successfully",
         total_chunks=total_chunks,
+        already_indexed=already_indexed,
     )
 
 
-@router.post("/ask", response_model=QAResponse)
+@router.post("/rag/ask", response_model=QAResponse)
 async def ask_question_endpoint(request: QuestionRequest) -> QAResponse:
-    if not request.query.strip():
+    query = request.query.strip()
+    if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
     try:
-        answer = generate_answer(request.query)
+        answer, sources = answer_question(query)
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return QAResponse(query=request.query, answer=answer)
+    return QAResponse(query=query, answer=answer, sources=sources)
+
+
+@router.post("/api/assistant", response_model=AssistantResponse)
+async def assistant_endpoint(request: AssistantRequest) -> AssistantResponse:
+    question = request.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+
+    try:
+        answer, sources = answer_question(question)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return AssistantResponse(question=question, answer=answer, sources=sources)
