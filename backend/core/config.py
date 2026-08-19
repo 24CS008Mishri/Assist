@@ -18,7 +18,7 @@ class Settings:
     mongodb_vector_index = os.getenv("MONGODB_VECTOR_INDEX", "vector_index")
 
     groq_api_key = os.getenv("GROQ_API_KEY", "")
-    groq_model = os.getenv("GROQ_MODEL", "gpt-oss-20b")
+    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
     embedding_model = os.getenv(
         "EMBEDDING_MODEL",
@@ -26,7 +26,12 @@ class Settings:
     )
     chunk_size = int(os.getenv("RAG_CHUNK_SIZE", "800"))
     chunk_overlap = int(os.getenv("RAG_CHUNK_OVERLAP", "120"))
-    retrieval_k = int(os.getenv("RAG_RETRIEVAL_K", "5"))
+    retrieval_k = int(os.getenv("RAG_RETRIEVAL_K", "12"))
+    retrieval_direct_k = int(os.getenv("RAG_RETRIEVAL_DIRECT_K", "8"))
+    retrieval_fetch_k = int(os.getenv("RAG_RETRIEVAL_FETCH_K", "36"))
+    retrieval_diversity = float(os.getenv("RAG_RETRIEVAL_DIVERSITY", "0.35"))
+    rag_context_char_limit = int(os.getenv("RAG_CONTEXT_CHAR_LIMIT", "30000"))
+    rag_answer_max_tokens = int(os.getenv("RAG_ANSWER_MAX_TOKENS", "1800"))
 
     cors_origins = [
         origin.strip()

@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List, Tuple
+from typing import List, Sequence, Tuple
 
 from langchain_core.documents import Document
 from langchain_groq import ChatGroq
@@ -9,7 +9,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from backend.core.config import get_settings
 from backend.data.database import get_collection
-from backend.models.schemas import Source
+from backend.models.schemas import ChatMessage, Source
 from backend.services.document_service import is_document_indexed, register_document
 
 
@@ -27,7 +27,8 @@ def get_llm() -> ChatGroq:
     return ChatGroq(
         groq_api_key=settings.groq_api_key,
         model_name=settings.groq_model,
-        temperature=0.1,
+        temperature=0.15,
+        max_tokens=settings.rag_answer_max_tokens,
     )
 
 
@@ -71,8 +72,33 @@ def process_and_store_pdf(text: str, filename: str) -> Tuple[int, bool]:
 
 def retrieve_context(query: str) -> List[Document]:
     vectorstore = get_vectorstore()
-    retriever = vectorstore.as_retriever(search_kwargs={"k": get_settings().retrieval_k})
-    return retriever.invoke(query)
+    settings = get_settings()
+    # Keep the highest-scoring chunks (precision) *and* merge in MMR results
+    # (coverage). MMR alone can occasionally remove the exact answer while
+    # seeking diversity, especially for a precise semester/course query.
+    direct_matches = vectorstore.similarity_search_with_score(
+        query, k=settings.retrieval_direct_k
+    )
+    for rank, (document, score) in enumerate(direct_matches, start=1):
+        document.metadata["retrieval_rank"] = rank
+        document.metadata["retrieval_score"] = score
+
+    diverse_matches = vectorstore.max_marginal_relevance_search(
+        query,
+        k=settings.retrieval_k,
+        fetch_k=max(settings.retrieval_fetch_k, settings.retrieval_k),
+        lambda_mult=settings.retrieval_diversity,
+    )
+    combined: List[Document] = []
+    seen_content = set()
+    for document in [doc for doc, _ in direct_matches] + diverse_matches:
+        fingerprint = " ".join(document.page_content.split())
+        if not fingerprint or fingerprint in seen_content:
+            continue
+        seen_content.add(fingerprint)
+        combined.append(document)
+
+    return combined
 
 
 def build_sources(documents: List[Document]) -> List[Source]:
@@ -82,6 +108,7 @@ def build_sources(documents: List[Document]) -> List[Source]:
     for doc in documents:
         source_name = doc.metadata.get("source", "Indexed PDF")
         chunk_index = doc.metadata.get("chunk_index")
+        retrieval_rank = doc.metadata.get("retrieval_rank")
         key = (source_name, chunk_index, doc.page_content[:80])
         if key in seen:
             continue
@@ -91,15 +118,34 @@ def build_sources(documents: List[Document]) -> List[Source]:
         sources.append(
             Source(
                 title=source_name,
-                section=f"Chunk {chunk_index + 1}" if isinstance(chunk_index, int) else "Retrieved excerpt",
-                detail=excerpt[:280] + ("..." if len(excerpt) > 280 else ""),
+                section=(
+                    f"Chunk {chunk_index + 1}"
+                    if isinstance(chunk_index, int)
+                    else f"Retrieved result {retrieval_rank}"
+                    if isinstance(retrieval_rank, int)
+                    else "Retrieved excerpt"
+                ),
+                detail=excerpt[:500] + ("..." if len(excerpt) > 500 else ""),
             )
         )
 
     return sources
 
 
-def answer_question(query: str) -> Tuple[str, List[Source]]:
+def _format_history(history: Sequence[ChatMessage]) -> str:
+    if not history:
+        return "No previous conversation."
+
+    # The current turn is retrieved independently; history provides only the
+    # conversational reference needed to resolve follow-up questions.
+    return "\n".join(
+        f"{message.role.title()}: {message.content.strip()}"
+        for message in history[-6:]
+        if message.content.strip()
+    )
+
+
+def answer_question(query: str, history: Sequence[ChatMessage] = ()) -> Tuple[str, List[Source]]:
     documents = retrieve_context(query)
     if not documents:
         return (
@@ -108,19 +154,54 @@ def answer_question(query: str) -> Tuple[str, List[Source]]:
         )
 
     context_blocks = []
+    context_length = 0
+    context_limit = get_settings().rag_context_char_limit
     for doc in documents:
         source_name = doc.metadata.get("source", "Indexed PDF")
-        chunk_index = doc.metadata.get("chunk_index", "unknown")
+        raw_chunk_index = doc.metadata.get("chunk_index")
+        chunk_index = raw_chunk_index + 1 if isinstance(raw_chunk_index, int) else None
+        retrieval_rank = doc.metadata.get("retrieval_rank")
+        citation = (
+            f"chunk: {chunk_index}"
+            if chunk_index is not None
+            else f"retrieved result: {retrieval_rank}"
+            if isinstance(retrieval_rank, int)
+            else "retrieved excerpt"
+        )
         content = doc.page_content.strip()
         if content:
-            context_blocks.append(f"[Source: {source_name}, chunk: {chunk_index}]\n{content}")
+            block = f"[Source: {source_name}, {citation}]\n{content}"
+            remaining = context_limit - context_length
+            if remaining <= 0:
+                break
+            context_blocks.append(block[:remaining])
+            context_length += len(block)
 
     prompt = (
-        "You are an AI assistant for curriculum designers. Answer only from the "
-        "provided indexed PDF context. If the context is insufficient, say what is "
-        "missing instead of inventing policy. Keep the answer practical and cite "
-        "the source document names in prose.\n\n"
-        f"Context:\n{chr(10).join(context_blocks)}\n\n"
+        "You are a careful AI assistant for curriculum designers. Answer only from "
+        "the retrieved indexed-PDF context. Conversation history is for resolving "
+        "references only; it is not evidence. Do not invent policy, requirements, "
+        "numbers, or citations.\n\n"
+        "Answer every distinct part of the question that is supported by the "
+        "context. Write a complete, useful answer; do not stop at a brief summary "
+        "when the context supports detail. Use this plain-text format exactly where "
+        "relevant:\n"
+        "SUMMARY\n"
+        "2–4 sentences that directly answer the question.\n\n"
+        "DETAILED GUIDANCE\n"
+        "Use clear numbered steps or bullets. Explain implications for curriculum "
+        "design, not just the rule.\n\n"
+        "EVIDENCE\n"
+        "For each important claim, cite the supplied source tag exactly as shown, for "
+        "example [Source: Guidelines.pdf, chunk: 2].\n\n"
+        "When the question asks for a comparison, mapping, allocation, or a list with "
+        "three or more repeated fields, use a Markdown table with a header row.\n\n"
+        "GAPS OR NEXT STEPS\n"
+        "State missing evidence or practical next actions. Include this section only "
+        "when applicable. If the retrieved context is insufficient, say so clearly "
+        "and do not fill gaps with general knowledge.\n\n"
+        f"Conversation history:\n{_format_history(history)}\n\n"
+        f"Retrieved PDF context:\n{chr(10).join(context_blocks)}\n\n"
         f"Question: {query}\n\n"
         "Answer:"
     )

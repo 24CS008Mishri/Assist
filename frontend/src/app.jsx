@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Router as WouterRouter, useLocation } from 'wouter';
 import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, Menu, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UserCog, Users, X } from 'lucide-react';
-import { mockChanges, mockCurricula, mockService, mockUsers, sourceCards } from '@/lib/mock-services';
+import { analyzerScoreHistory, mockChanges, mockCurricula, mockService, mockUsers, sourceCards } from '@/lib/mock-services';
 const roles = {
     admin: { label: 'AICTE Admin', short: 'Admin', base: '/admin/dashboard', description: 'Authoritative governance and national oversight', icon: Landmark },
     reviewer: { label: 'Reviewer / Expert', short: 'Reviewer', base: '/reviewer/dashboard', description: 'Human review, evidence and final decisions', icon: ClipboardCheck },
@@ -71,14 +71,13 @@ function Portal() {
     const [toast, setToast] = useState('');
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const notify = (message) => { setToast(message); window.setTimeout(() => setToast(''), 2600); };
-    const login = async (role, email = '') => {
-        // Calls the backend so all 4 role workspaces authenticate against one
-        // live source of truth (falls back to local demo data automatically).
-        const next = await mockService.login(role, email);
+    const login = async (email, password) => {
+        // The account record—not a client-selected role—determines the workspace.
+        const next = await mockService.login(email, password);
         localStorage.setItem('aicte-demo-session', JSON.stringify(next));
         setSession(next);
         setSidebarOpen(false);
-        setLocation(roles[role].base);
+        setLocation(roles[next.role].base);
     };
     const logout = () => { localStorage.removeItem('aicte-demo-session'); setSession(null); setLocation('/login'); };
     if (location === '/login' || location === '/signup' || location === '/forgot-password' || location === '/reset-password') {
@@ -102,41 +101,38 @@ function Portal() {
             setLocation('/login');
         return null;
     }
-    return <AppShell session={session} role={expectedRole} path={location} open={sidebarOpen} setOpen={setSidebarOpen} onLogout={logout} onSwitch={login} notify={notify} toast={toast}/>;
+    return <AppShell session={session} role={expectedRole} path={location} open={sidebarOpen} setOpen={setSidebarOpen} onLogout={logout} notify={notify} toast={toast}/>;
 }
 function AuthPage({ mode, onLogin }) {
     const [, setLocation] = useLocation();
-    const [role, setRole] = useState('designer');
     const [show, setShow] = useState(false);
+    const [authError, setAuthError] = useState('');
     const [submitted, setSubmitted] = useState(false);
     const [emailSent, setEmailSent] = useState(false);
     const title = mode === 'signup' ? 'Create a governed workspace' : mode === 'forgot-password' ? 'Recover access' : mode === 'reset-password' ? 'Set a new password' : 'Curriculum truth, with a human in the loop.';
     if (submitted || emailSent)
-        return <div className="auth-wrap grain"><div className="surface" style={{ maxWidth: 520, padding: 42, textAlign: 'center' }}><div className="brand-mark" style={{ margin: '0 auto 18px' }}><Check size={21}/></div><p className="eyebrow">Request recorded</p><h1 className="page-title" style={{ margin: '8px 0 12px' }}>{mode === 'forgot-password' ? 'Check your inbox' : 'Workspace ready'}</h1><p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>{mode === 'forgot-password' ? 'A secure reset link has been sent to the address provided. This demo accepts any email.' : 'Your demo account is configured. Continue to the role workspace.'}</p><button className="btn btn-primary" style={{ marginTop: 22 }} onClick={() => mode === 'forgot-password' ? setLocation('/login') : onLogin(role)} data-testid="button-auth-continue">Continue</button></div></div>;
+        return <div className="auth-wrap grain"><div className="surface" style={{ maxWidth: 520, padding: 42, textAlign: 'center' }}><div className="brand-mark" style={{ margin: '0 auto 18px' }}><Check size={21}/></div><p className="eyebrow">Request recorded</p><h1 className="page-title" style={{ margin: '8px 0 12px' }}>{mode === 'forgot-password' ? 'Check your inbox' : 'Workspace ready'}</h1><p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>{mode === 'forgot-password' ? 'A secure reset link has been sent to the address provided. This demo accepts any email.' : 'Your demo account is configured. Please sign in using your work email.'}</p><button className="btn btn-primary" style={{ marginTop: 22 }} onClick={() => setLocation('/login')} data-testid="button-auth-continue">Continue to sign in</button></div></div>;
     return <div className="auth-wrap grain"><div className="auth-panel">
     <section className="auth-visual"><div><div style={{ display: 'flex', alignItems: 'center', gap: 11 }}><div className="brand-mark"><Landmark size={19}/></div><strong className="font-display">AICTE / MCI GOV</strong></div><div style={{ marginTop: 86 }}><p className="eyebrow" style={{ color: '#e7daf4' }}>National academic governance</p><h1 style={{ font: '700 42px/1.03 var(--app-font-display)', letterSpacing: '-.055em', margin: '12px 0 16px' }}>A calmer way to steward curriculum.</h1><p style={{ color: 'rgba(255,255,255,.7)', maxWidth: 310, lineHeight: 1.7, fontSize: 13 }}>Authoritative sources. Visible evidence. Expert decisions. One shared record of curriculum truth.</p></div></div><div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'rgba(255,255,255,.68)', fontSize: 11 }}><ShieldCheck size={16}/> AI assistance never replaces human approval.</div></section>
     <section className="auth-form"><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }}><div><p className="eyebrow">Demo access portal</p><h2 className="font-display" style={{ fontSize: 25, margin: '7px 0 0', letterSpacing: '-.035em' }}>{title}</h2></div><div className="brand-mark" style={{ background: '#f2eafa' }}><LockKeyhole size={19}/></div></div>
-      {mode === 'login' && <form onSubmit={(event) => { event.preventDefault(); onLogin(role, event.currentTarget.elements.namedItem('email').value); }}><label className="label">Email address</label><input className="field" name="email" type="email" defaultValue={mockUsers.find((u) => u.role === role)?.email} required data-testid="input-login-email"/><label className="label" style={{ marginTop: 14 }}>Password</label><div style={{ position: 'relative' }}><input className="field" name="password" type={show ? 'text' : 'password'} defaultValue="governance2026" required style={{ paddingRight: 44 }} data-testid="input-login-password"/><button type="button" className="btn btn-ghost icon-btn" style={{ position: 'absolute', right: 2, top: 2, boxShadow: 'none' }} onClick={() => setShow(!show)} data-testid="button-show-password"><Eye size={16}/></button></div><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '12px 0 17px', fontSize: 11 }}><label style={{ display: 'flex', gap: 7, alignItems: 'center' }}><input type="checkbox" defaultChecked/> Remember this device</label><button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/forgot-password')} data-testid="link-forgot-password">Forgot password?</button></div><RolePicker role={role} setRole={setRole}/><button className="btn btn-primary" style={{ width: '100%', marginTop: 20, minHeight: 44 }} data-testid="button-login">Enter {roles[role].short} workspace <ArrowRight size={16}/></button><p className="muted" style={{ textAlign: 'center', fontSize: 11, marginTop: 18 }}>New to the portal? <button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/signup')} data-testid="link-signup">Create an account</button></p></form>}
-      {mode === 'signup' && <form onSubmit={(event) => { event.preventDefault(); setSubmitted(true); }}><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div><label className="label">Full name</label><input className="field" required data-testid="input-signup-name"/></div><div><label className="label">Organization</label><input className="field" required data-testid="input-signup-organization"/></div></div><label className="label" style={{ marginTop: 13 }}>Work email</label><input className="field" type="email" required data-testid="input-signup-email"/><label className="label" style={{ marginTop: 13 }}>Password</label><input className="field" type="password" required data-testid="input-signup-password"/><RolePicker role={role} setRole={setRole}/><label style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 11, margin: '15px 0' }}><input type="checkbox" required data-testid="checkbox-signup-terms"/> I agree to the governance workspace terms.</label><button className="btn btn-primary" style={{ width: '100%' }} data-testid="button-create-account">Create demo account <ArrowRight size={16}/></button><button type="button" className="btn btn-ghost" style={{ width: '100%', marginTop: 6 }} onClick={() => setLocation('/login')} data-testid="link-back-login">Back to sign in</button></form>}
+      {mode === 'login' && <form onSubmit={async (event) => { event.preventDefault(); setAuthError(''); try { await onLogin(event.currentTarget.elements.namedItem('email').value, event.currentTarget.elements.namedItem('password').value); } catch { setAuthError('Incorrect email address or password.'); } }}><label className="label">Email address</label><input className="field" name="email" type="email" autoComplete="email" placeholder="name@organization.edu" required data-testid="input-login-email"/><label className="label" style={{ marginTop: 14 }}>Password</label><div style={{ position: 'relative' }}><input className="field" name="password" type={show ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" required style={{ paddingRight: 44 }} data-testid="input-login-password"/><button type="button" className="btn btn-ghost icon-btn" aria-label={show ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: 2, top: 2, boxShadow: 'none' }} onClick={() => setShow(!show)} data-testid="button-show-password"><Eye size={16}/></button></div>{authError && <p className="auth-error" role="alert">{authError}</p>}<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '12px 0 17px', fontSize: 11 }}><label style={{ display: 'flex', gap: 7, alignItems: 'center' }}><input type="checkbox" defaultChecked/> Remember this device</label><button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/forgot-password')} data-testid="link-forgot-password">Forgot password?</button></div><p className="muted" style={{ fontSize: 11, lineHeight: 1.5 }}>Your email identifies your assigned role and opens only that workspace.</p><button className="btn btn-primary" style={{ width: '100%', marginTop: 20, minHeight: 44 }} data-testid="button-login">Sign in <ArrowRight size={16}/></button><p className="muted" style={{ textAlign: 'center', fontSize: 11, marginTop: 18 }}>New to the portal? <button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/signup')} data-testid="link-signup">Create an account</button></p></form>}
+      {mode === 'signup' && <form onSubmit={(event) => { event.preventDefault(); const form = event.currentTarget; if (form.elements.namedItem('password').value !== form.elements.namedItem('confirmPassword').value) { form.elements.namedItem('confirmPassword').setCustomValidity('Passwords do not match'); form.reportValidity(); return; } setSubmitted(true); }} onInput={(event) => event.currentTarget.elements.namedItem('confirmPassword')?.setCustomValidity('')}><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div><label className="label">Full name</label><input className="field" autoComplete="name" required data-testid="input-signup-name"/></div><div><label className="label">Organization</label><input className="field" autoComplete="organization" required data-testid="input-signup-organization"/></div></div><label className="label" style={{ marginTop: 13 }}>Work email</label><input className="field" type="email" autoComplete="email" placeholder="name@organization.edu" required data-testid="input-signup-email"/><label className="label" style={{ marginTop: 13 }}>Password</label><input className="field" name="password" type={show ? 'text' : 'password'} autoComplete="new-password" minLength={8} placeholder="At least 8 characters" required data-testid="input-signup-password"/><label className="label" style={{ marginTop: 13 }}>Confirm password</label><input className="field" name="confirmPassword" type={show ? 'text' : 'password'} autoComplete="new-password" placeholder="Re-enter your password" required data-testid="input-signup-confirm-password"/><p className="muted" style={{ fontSize: 11, lineHeight: 1.5, margin: '16px 0' }}>Your workspace role is assigned by an administrator after account approval.</p><label style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 11, margin: '15px 0' }}><input type="checkbox" required data-testid="checkbox-signup-terms"/> I agree to the governance workspace terms.</label><button className="btn btn-primary" style={{ width: '100%' }} data-testid="button-create-account">Request account <ArrowRight size={16}/></button><button type="button" className="btn btn-ghost" style={{ width: '100%', marginTop: 6 }} onClick={() => setLocation('/login')} data-testid="link-back-login">Back to sign in</button></form>}
       {mode === 'forgot-password' && <form onSubmit={(event) => { event.preventDefault(); setEmailSent(true); }}><p className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>Enter your work email and we will send a secure link to reset your access.</p><label className="label" style={{ marginTop: 20 }}>Work email</label><input className="field" type="email" required data-testid="input-forgot-email"/><button className="btn btn-primary" style={{ width: '100%', marginTop: 20 }} data-testid="button-send-reset">Send reset link <Send size={15}/></button><button type="button" className="btn btn-ghost" style={{ width: '100%', marginTop: 7 }} onClick={() => setLocation('/login')} data-testid="link-back-login">Return to sign in</button></form>}
       {mode === 'reset-password' && <form onSubmit={(event) => { event.preventDefault(); setSubmitted(true); }}><label className="label">New password</label><input className="field" type="password" minLength={8} required data-testid="input-reset-password"/><label className="label" style={{ marginTop: 14 }}>Confirm password</label><input className="field" type="password" minLength={8} required data-testid="input-reset-confirm"/><button className="btn btn-primary" style={{ width: '100%', marginTop: 22 }} data-testid="button-reset-password">Update password <Check size={15}/></button></form>}
     </section>
   </div></div>;
 }
-function RolePicker({ role, setRole }) {
-    return <div className="role-grid">{Object.keys(roles).map((item) => { const Icon = roles[item].icon; return <button type="button" key={item} className={`role-card ${role === item ? 'selected' : ''}`} onClick={() => setRole(item)} data-testid={`button-role-${item}`}><span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700 }}><Icon size={15}/> {roles[item].label}</span><span className="muted" style={{ display: 'block', marginTop: 5, fontSize: 10, lineHeight: 1.3 }}>{roles[item].description}</span></button>; })}</div>;
-}
 function Unauthorized() {
     const [, setLocation] = useLocation();
-    return <div className="auth-wrap grain"><div className="surface" style={{ maxWidth: 510, padding: 42, textAlign: 'center' }}><div className="brand-mark" style={{ margin: '0 auto 18px', background: '#f6d9d8', color: '#8e3c39' }}><CircleAlert size={22}/></div><p className="eyebrow">Access boundary</p><h1 className="page-title" style={{ margin: '8px 0 12px' }}>This workspace is not assigned to you.</h1><p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>The demo keeps each governance role separate. Use the role switcher from an authenticated workspace or return to sign in.</p><button className="btn btn-primary" style={{ marginTop: 22 }} onClick={() => setLocation('/login')} data-testid="button-unauthorized-login"><ArrowLeft size={15}/> Return to sign in</button></div></div>;
+    return <div className="auth-wrap grain"><div className="surface" style={{ maxWidth: 510, padding: 42, textAlign: 'center' }}><div className="brand-mark" style={{ margin: '0 auto 18px', background: '#f6d9d8', color: '#8e3c39' }}><CircleAlert size={22}/></div><p className="eyebrow">Access boundary</p><h1 className="page-title" style={{ margin: '8px 0 12px' }}>This workspace is not assigned to you.</h1><p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>Your account can only access the workspace assigned to its role. Return to sign in to use another account.</p><button className="btn btn-primary" style={{ marginTop: 22 }} onClick={() => setLocation('/login')} data-testid="button-unauthorized-login"><ArrowLeft size={15}/> Return to sign in</button></div></div>;
 }
-function AppShell({ session, role, path, open, setOpen, onLogout, onSwitch, notify, toast }) {
+function AppShell({ session, role, path, open, setOpen, onLogout, notify, toast }) {
     const [menu, setMenu] = useState(false);
     const links = navByRole[role].filter((item) => can(role, item.permission));
     const primaryLinks = links.filter((item) => item.label !== 'Settings');
     const settingsLink = links.find((item) => item.label === 'Settings');
     const current = links.find((item) => path === item.href) ?? links.find((item) => path.startsWith(item.href)) ?? links[0];
-    return <div className="app-shell grain"><aside className={`sidebar ${open ? 'open' : ''}`}><div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '0 10px 27px', minWidth: 0 }}><div className="brand-mark"><Landmark size={18}/></div><div style={{ minWidth: 0 }}><strong className="font-display" style={{ fontSize: 14 }}>AICTE / MCI</strong><div style={{ color: 'rgba(255,255,255,.5)', fontSize: 9, marginTop: 2 }}>GOVERNANCE PORTAL</div></div><button className="btn btn-ghost icon-btn" style={{ marginLeft: 'auto', color: '#fff', display: 'none' }} onClick={() => setOpen(false)}><X size={17}/></button></div><div className="sidebar-scroll">{primaryLinks.map((item) => <Link href={item.href} key={item.href} className={`nav-link ${current?.href === item.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}><item.icon size={16} strokeWidth={1.8}/><span>{item.label}</span></Link>)}</div><div className="sidebar-footer"><div style={{ padding: '10px 13px', color: 'rgba(255,255,255,.6)', fontSize: 10, lineHeight: 1.5 }}>DEMO MODE<br /><span style={{ color: '#e7d6f7' }}>Local governance state</span></div>{settingsLink && <Link href={settingsLink.href} className={`nav-link ${current?.href === settingsLink.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid="link-nav-settings"><Settings size={16}/><span>Settings</span></Link>}<button className="nav-link" onClick={onLogout} data-testid="button-logout"><LogOut size={16}/><span>Sign out</span></button></div></aside>{open && <button className="drawer-backdrop" onClick={() => setOpen(false)} aria-label="Close navigation"/>}<main className="main-area"><header className="topbar"><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button className="btn icon-btn mobile-menu" onClick={() => setOpen(true)} data-testid="button-open-navigation"><Menu size={18}/></button><div className="breadcrumb muted" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}><span>Workspace</span><ChevronRight size={13}/><strong style={{ color: 'hsl(var(--foreground))' }}>{current?.label}</strong></div></div><div className="topbar-actions"><button className="btn icon-btn notification-button" onClick={() => notify('No new alerts. You are up to date.')} aria-label="Open notifications" data-testid="button-header-notifications"><Bell size={17}/><span className="notification-dot"/></button><div style={{ position: 'relative' }}><button className="btn" style={{ padding: '4px 9px 4px 5px', gap: 8 }} onClick={() => setMenu(!menu)} data-testid="button-user-menu"><span className="brand-mark" style={{ width: 29, height: 29, borderRadius: 10, fontSize: 10, fontWeight: 700 }}>{initials(session.name)}</span><span style={{ textAlign: 'left', display: 'block' }}><strong style={{ display: 'block', fontSize: 11 }}>{session.name}</strong><small className="muted" style={{ fontSize: 9 }}>{roles[role].short}</small></span><ChevronDown size={14}/></button>{menu && <div className="surface" style={{ position: 'absolute', right: 0, top: 48, width: 230, padding: 10, zIndex: 40 }}><p className="eyebrow" style={{ padding: '4px 8px 8px' }}>Switch demo role</p>{Object.keys(roles).map((item) => { const RoleIcon = roles[item].icon; return <button key={item} className="btn btn-ghost" style={{ width: '100%', justifyContent: 'flex-start', color: item === role ? '#7856a7' : undefined, background: item === role ? '#f0e8fa' : undefined }} onClick={() => { onSwitch(item); setMenu(false); }} data-testid={`button-switch-${item}`}><span className="brand-mark" style={{ width: 25, height: 25, borderRadius: 8 }}><RoleIcon size={13}/></span>{roles[item].label}</button>; })}<button className="btn btn-ghost btn-danger" style={{ width: '100%', justifyContent: 'flex-start', marginTop: 4 }} onClick={onLogout} data-testid="button-menu-logout"><LogOut size={14}/> Sign out</button></div>}</div></div></header><PageContent role={role} path={path} notify={notify}/></main>{toast && <div className="toast-note" data-testid="status-toast"><CheckCircle size={15} style={{ verticalAlign: 'middle', marginRight: 7 }}/>{toast}</div>}</div>;
+    return <div className="app-shell grain"><aside className={`sidebar ${open ? 'open' : ''}`}><div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '0 10px 27px', minWidth: 0 }}><div className="brand-mark"><Landmark size={18}/></div><div style={{ minWidth: 0 }}><strong className="font-display" style={{ fontSize: 14 }}>AICTE / MCI</strong><div style={{ color: 'rgba(255,255,255,.5)', fontSize: 9, marginTop: 2 }}>GOVERNANCE PORTAL</div></div><button className="btn btn-ghost icon-btn" style={{ marginLeft: 'auto', color: '#fff', display: 'none' }} onClick={() => setOpen(false)}><X size={17}/></button></div><div className="sidebar-scroll">{primaryLinks.map((item) => <Link href={item.href} key={item.href} className={`nav-link ${current?.href === item.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}><item.icon size={16} strokeWidth={1.8}/><span>{item.label}</span></Link>)}</div><div className="sidebar-footer"><div style={{ padding: '10px 13px', color: 'rgba(255,255,255,.6)', fontSize: 10, lineHeight: 1.5 }}>DEMO MODE<br /><span style={{ color: '#e7d6f7' }}>Local governance state</span></div>{settingsLink && <Link href={settingsLink.href} className={`nav-link ${current?.href === settingsLink.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid="link-nav-settings"><Settings size={16}/><span>Settings</span></Link>}<button className="nav-link" onClick={onLogout} data-testid="button-logout"><LogOut size={16}/><span>Sign out</span></button></div></aside>{open && <button className="drawer-backdrop" onClick={() => setOpen(false)} aria-label="Close navigation"/>}<main className="main-area"><header className="topbar"><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button className="btn icon-btn mobile-menu" onClick={() => setOpen(true)} data-testid="button-open-navigation"><Menu size={18}/></button><div className="breadcrumb muted" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}><span>Workspace</span><ChevronRight size={13}/><strong style={{ color: 'hsl(var(--foreground))' }}>{current?.label}</strong></div></div><div className="topbar-actions"><button className="btn icon-btn notification-button" onClick={() => notify('No new alerts. You are up to date.')} aria-label="Open notifications" data-testid="button-header-notifications"><Bell size={17}/><span className="notification-dot"/></button><div style={{ position: 'relative' }}><button className="btn" style={{ padding: '4px 9px 4px 5px', gap: 8 }} onClick={() => setMenu(!menu)} data-testid="button-user-menu"><span className="brand-mark" style={{ width: 29, height: 29, borderRadius: 10, fontSize: 10, fontWeight: 700 }}>{initials(session.name)}</span><span style={{ textAlign: 'left', display: 'block' }}><strong style={{ display: 'block', fontSize: 11 }}>{session.name}</strong><small className="muted" style={{ fontSize: 9 }}>{roles[role].short}</small></span><ChevronDown size={14}/></button>{menu && <div className="surface" style={{ position: 'absolute', right: 0, top: 48, width: 230, padding: 10, zIndex: 40 }}><p className="eyebrow" style={{ padding: '4px 8px 8px' }}>Signed in workspace</p><div style={{ padding: '2px 8px 10px', fontSize: 12 }}><strong>{roles[role].label}</strong><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 3 }}>Role is assigned to your account.</span></div><button className="btn btn-ghost btn-danger" style={{ width: '100%', justifyContent: 'flex-start', marginTop: 4 }} onClick={onLogout} data-testid="button-menu-logout"><LogOut size={14}/> Sign out</button></div>}</div></div></header><PageContent role={role} path={path} notify={notify}/></main>{toast && <div className="toast-note" data-testid="status-toast"><CheckCircle size={15} style={{ verticalAlign: 'middle', marginRight: 7 }}/>{toast}</div>}</div>;
 }
 function PageContent({ role, path, notify }) {
     if (path.endsWith('/dashboard'))
@@ -415,58 +411,118 @@ function AssistantPage({ notify }) {
     const sources = answer?.sources?.length ? answer.sources : sourceCards.slice(0, 2);
     return <div className="content"><PageHeader eyebrow="Designer / Evidence assistant" title="AI assistant" detail="Ask against AICTE sources and curriculum context, not an unrestricted chat model."/><div style={{ maxWidth: 980 }}><SectionCard title="Relevant official documents"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>{sourceCards.slice(0, 2).map((source) => <SourceCard key={source.section} source={source}/>)}</div></SectionCard><div style={{ marginTop: 16 }}><SectionCard title="Curriculum question"><div style={{ padding: 17, minHeight: 250, background: '#f9f5fd', borderRadius: 1, border: '1px solid #e1d6ef' }}>{loading ? <div className="muted" style={{ fontSize: 12 }}>Reading official sources and preparing a recommendation…</div> : answer ? <><span className="badge badge-slate">Your question</span><p style={{ fontSize: 13, lineHeight: 1.55 }}>{answer.question}</p><div style={{ marginTop: 17, padding: 14, borderRadius: '.8rem', background: '#f1e7fb', border: '1px solid #d8c6eb' }}><div style={{ color: '#73529e', fontSize: 10, fontWeight: 800, letterSpacing: '.08em' }}><Sparkles size={13} style={{ verticalAlign: 'middle', marginRight: 5 }}/> AI RECOMMENDATION</div><p style={{ fontSize: 12, lineHeight: 1.65, marginBottom: 0 }}>{answer.answer}</p></div><div style={{ display: 'flex', gap: 8, marginTop: 14 }}><button className="btn" onClick={() => notify('Recommendation copied into the outcome draft.')} data-testid="button-apply-ai-answer"><Check size={14}/> Apply to draft</button><button className="btn btn-ghost" onClick={() => setAnswer(null)} data-testid="button-new-question">New question</button></div></> : <div style={{ textAlign: 'center', padding: '50px 10px' }}><Bot size={27} color="#8061ac"/><p style={{ fontSize: 13, margin: '12px 0 4px' }}>Ask a curriculum question</p><span className="muted" style={{ fontSize: 11 }}>Responses carry official source references.</span></div>}</div><form onSubmit={ask} style={{ display: 'flex', gap: 8, marginTop: 13 }}><input className="field" value={question} onChange={(e) => setQuestion(e.target.value)} data-testid="input-assistant-question"/><button className="btn btn-primary icon-btn" data-testid="button-ask-assistant"><Send size={15}/></button></form></SectionCard></div></div></div>;
 }
+function renderAnswerInline(text) {
+    return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => part.startsWith('**') && part.endsWith('**') ? <strong key={index}>{part.slice(2, -2)}</strong> : part);
+}
+function tableCells(line) {
+    return line.trim().replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim());
+}
+function isTableDivider(line) {
+    return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+}
+function RagAnswer({ content }) {
+    const lines = content.split('\n');
+    const blocks = [];
+    let index = 0;
+    while (index < lines.length) {
+        if (lines[index].includes('|') && isTableDivider(lines[index + 1] ?? '')) {
+            const headers = tableCells(lines[index]);
+            index += 2;
+            const rows = [];
+            while (index < lines.length && lines[index].includes('|')) {
+                rows.push(tableCells(lines[index]));
+                index += 1;
+            }
+            blocks.push(<div className="table-scroll" key={`table-${index}`}><table className="rag-answer-table"><thead><tr>{headers.map((header, cell) => <th key={cell}>{renderAnswerInline(header)}</th>)}</tr></thead><tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{headers.map((_, cell) => <td key={cell}>{renderAnswerInline(row[cell] ?? '')}</td>)}</tr>)}</tbody></table></div>);
+            continue;
+        }
+        const line = lines[index].trim();
+        if (line) {
+            const isHeading = /^[A-Z][A-Z /&-]{2,}$/.test(line);
+            blocks.push(<p className={isHeading ? 'rag-answer-heading' : undefined} key={`line-${index}`}>{renderAnswerInline(line)}</p>);
+        }
+        index += 1;
+    }
+    return <div className="rag-answer">{blocks}</div>;
+}
 function RagAssistantPage({ notify }) {
-    const [question, setQuestion] = useState('What learning outcomes should I define for a DBMS course?');
-    const [answer, setAnswer] = useState(null);
+    const [question, setQuestion] = useState('');
+    const [chats, setChats] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('aicte-assistant-chat-history')) ?? []; }
+        catch { return []; }
+    });
+    const [activeChatId, setActiveChatId] = useState(null);
     const [loading, setLoading] = useState(false);
-    const sources = answer?.sources?.length ? answer.sources : sourceCards.slice(0, 2);
+    const activeChat = chats.find((chat) => chat.id === activeChatId);
+    const messages = activeChat?.messages ?? [];
+    const sources = messages.at(-1)?.sources ?? [];
+    useEffect(() => {
+        localStorage.setItem('aicte-assistant-chat-history', JSON.stringify(chats));
+    }, [chats]);
+    const updateChat = (chatId, update) => {
+        setChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, ...update, updatedAt: Date.now() } : chat));
+    };
+    const startNewChat = () => {
+        setActiveChatId(null);
+        setQuestion('');
+    };
     const ask = async (event) => {
         event.preventDefault();
-        if (!question.trim())
+        const text = question.trim();
+        if (!text || loading)
             return;
+        const history = messages.map(({ role, content }) => ({ role, content }));
+        const chatId = activeChatId ?? `chat-${Date.now()}`;
+        const nextMessages = [...messages, { role: 'user', content: text }];
+        if (activeChatId)
+            updateChat(chatId, { messages: nextMessages });
+        else {
+            setChats((current) => [{ id: chatId, title: text.slice(0, 58), messages: nextMessages, updatedAt: Date.now() }, ...current]);
+            setActiveChatId(chatId);
+        }
+        setQuestion('');
         setLoading(true);
         try {
-            setAnswer(await mockService.askAssistant(question));
+            const response = await mockService.askAssistant(text, history);
+            setChats((current) => current.map((chat) => chat.id === chatId ? {
+                ...chat,
+                messages: [...chat.messages, { role: 'assistant', content: response.answer, sources: response.sources ?? [] }],
+                updatedAt: Date.now(),
+            } : chat));
         }
         catch (error) {
-            notify(error.message);
+            notify(`Assistant unavailable: ${error.message}`);
         }
         finally {
             setLoading(false);
         }
     };
     return <div className="content">
-        <PageHeader eyebrow="Designer / Evidence assistant" title="AI assistant" detail="Ask against indexed AICTE PDFs stored in MongoDB Atlas Vector Search."/>
+        <PageHeader eyebrow="Designer / Evidence assistant" title="AI Assistant" detail="Ask against indexed AICTE PDFs stored in MongoDB Atlas Vector Search."/>
         <div style={{ maxWidth: 980 }}>
-            <SectionCard title={answer?.sources?.length ? 'Retrieved source chunks' : 'Relevant official documents'}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>
-                    {sources.map((source, index) => <SourceCard key={`${source.title}-${source.section}-${index}`} source={source}/>)}
+            <SectionCard title="Conversation">
+                <div className="rag-conversation" aria-live="polite">
+                    {!messages.length && <div className="rag-empty"><Bot size={27} color="#8061ac"/><p>Start a grounded curriculum conversation</p><span>Ask about policies, course structure, outcomes, or assessment using the PDFs indexed by the Admin.</span></div>}
+                    {messages.map((message, index) => <div className={`rag-message ${message.role}`} key={`${message.role}-${index}`}><span className="badge badge-slate">{message.role === 'user' ? 'You' : 'AI Assistant'}</span>{message.role === 'assistant' ? <RagAnswer content={message.content}/> : <p>{message.content}</p>}{message.role === 'assistant' && <button className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => notify('Recommendation copied into the curriculum draft.')} data-testid={`button-apply-ai-answer-${index}`}><Check size={14}/> Apply to draft</button>}</div>)}
+                    {loading && <div className="rag-message assistant"><span className="badge badge-slate">AI Assistant</span><p className="muted">Searching indexed PDF vectors and preparing a grounded answer…</p></div>}
                 </div>
+                <form onSubmit={ask} style={{ display: 'flex', gap: 8, marginTop: 13 }}>
+                    <input className="field" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask a question about the indexed curriculum documents…" disabled={loading} data-testid="input-assistant-question"/>
+                    <button className="btn btn-primary icon-btn" aria-label="Send question" disabled={loading || !question.trim()} data-testid="button-ask-assistant"><Send size={15}/></button>
+                </form>
             </SectionCard>
             <div style={{ marginTop: 16 }}>
-                <SectionCard title="Curriculum question">
-                    <div style={{ padding: 17, minHeight: 250, background: '#f9f5fd', borderRadius: 1, border: '1px solid #e1d6ef' }}>
-                        {loading ? <div className="muted" style={{ fontSize: 12 }}>Searching MongoDB vectors and preparing a grounded answer...</div> : answer ? <>
-                            <span className="badge badge-slate">Your question</span>
-                            <p style={{ fontSize: 13, lineHeight: 1.55 }}>{answer.question}</p>
-                            <div style={{ marginTop: 17, padding: 14, borderRadius: '.8rem', background: '#f1e7fb', border: '1px solid #d8c6eb' }}>
-                                <div style={{ color: '#73529e', fontSize: 10, fontWeight: 800, letterSpacing: '.08em' }}><Sparkles size={13} style={{ verticalAlign: 'middle', marginRight: 5 }}/> RAG RECOMMENDATION</div>
-                                <p style={{ fontSize: 12, lineHeight: 1.65, marginBottom: 0, whiteSpace: 'pre-wrap' }}>{answer.answer}</p>
-                            </div>
-                            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                                <button className="btn" onClick={() => notify('Recommendation copied into the outcome draft.')} data-testid="button-apply-ai-answer"><Check size={14}/> Apply to draft</button>
-                                <button className="btn btn-ghost" onClick={() => setAnswer(null)} data-testid="button-new-question">New question</button>
-                            </div>
-                        </> : <div style={{ textAlign: 'center', padding: '50px 10px' }}>
-                            <Bot size={27} color="#8061ac"/>
-                            <p style={{ fontSize: 13, margin: '12px 0 4px' }}>Ask a curriculum question</p>
-                            <span className="muted" style={{ fontSize: 11 }}>Responses use the indexed PDF vector collection.</span>
-                        </div>}
-                    </div>
-                    <form onSubmit={ask} style={{ display: 'flex', gap: 8, marginTop: 13 }}>
-                        <input className="field" value={question} onChange={(e) => setQuestion(e.target.value)} data-testid="input-assistant-question"/>
-                        <button className="btn btn-primary icon-btn" disabled={loading || !question.trim()} data-testid="button-ask-assistant"><Send size={15}/></button>
-                    </form>
+                <SectionCard title="Chat history" action={<button className="btn" onClick={startNewChat} disabled={loading} data-testid="button-new-assistant-chat"><Plus size={14}/> New chat</button>}>
+                    {chats.length ? <div className="chat-history-list" aria-label="Previous chats">
+                        {chats.map((chat) => <button key={chat.id} type="button" className={`chat-history-item ${chat.id === activeChatId ? 'active' : ''}`} onClick={() => { setActiveChatId(chat.id); setQuestion(''); }} data-testid={`button-chat-history-${chat.id}`}>
+                            <MessageSquareText size={15}/><span><strong>{chat.title}</strong><small>{chat.messages.length} messages · {new Date(chat.updatedAt).toLocaleDateString()}</small></span><ChevronRight size={15}/>
+                        </button>)}
+                    </div> : <p className="muted" style={{ fontSize: 12, margin: 0 }}>Your completed conversations will appear here. Select one to continue where you left off.</p>}
+                </SectionCard>
+            </div>
+            <div style={{ marginTop: 16 }}>
+                <SectionCard title={sources.length ? 'Sources for the latest answer' : 'Sources will appear with the first answer'}>
+                    {sources.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>{sources.map((source, index) => <SourceCard key={`${source.title}-${source.section}-${index}`} source={source}/>)}</div> : <p className="muted" style={{ fontSize: 12, margin: 0 }}>The assistant only answers from chunks retrieved from the MongoDB Atlas vector collection.</p>}
                 </SectionCard>
             </div>
         </div>
@@ -491,10 +547,14 @@ function DesignerChanges({ notify }) {
     return <div className="content"><PageHeader eyebrow="Designer / Next version inputs" title="Change requests" detail="Accepting a request informs the next curriculum version. It never edits a published version directly."/><div style={{ display: 'grid', gap: 12 }}>{changes.map((change) => <div className="surface" style={{ padding: 19 }} key={change.id}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><span className="eyebrow">CHANGE REQUEST #{change.id}</span><h3 className="font-display" style={{ fontSize: 17, margin: '7px 0' }}>{change.course}</h3></div><div style={{ display: 'flex', gap: 7 }}><span className={`badge ${change.priority === 'High' ? 'badge-red' : 'badge-amber'}`}>{change.priority} priority</span><StatusBadge status={change.status}/></div></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 15, marginTop: 13 }}><div><span className="eyebrow">Issue</span><p style={{ fontSize: 12 }}>{change.issue}</p></div><div><span className="eyebrow">Suggested change</span><p style={{ fontSize: 12 }}>{change.suggestion}</p></div><div><span className="eyebrow">Reason / evidence</span><p style={{ fontSize: 12 }}>{change.reason}</p></div></div><div style={{ display: 'flex', gap: 8, marginTop: 8 }}><button className="btn btn-primary" onClick={() => { setChanges(changes.map((item) => item.id === change.id ? { ...item, status: 'Included in Next Version' } : item)); notify(`${change.id} added to the next version backlog.`); }} data-testid={`button-accept-change-${change.id}`}><Check size={14}/> Add to next version</button><button className="btn" onClick={() => notify('Discussion note opened.')} data-testid={`button-discuss-change-${change.id}`}><MessageSquareText size={14}/> Discuss</button></div></div>)}</div></div>;
 }
 function ImprovementTracker({ notify }) {
-    const [stage, setStage] = useState({ c3: 0 });
-    const stages = ['Rejected / changes required', 'Changes applied', 'Resubmitted for screening', 'Accepted', 'Published'];
-    const items = [{ id: 'c3', name: 'B.Tech Electronics & Communication Engineering', institute: 'Crescent Valley University', issue: 'Assessment balance and practical coverage require revision.', solution: 'Add a practical evaluation, rebalance assessment weight and update evidence mapping.' }];
-    return <div className="content"><PageHeader eyebrow="Designer / Continuous improvement" title="Improvement tracker" detail="Follow every rejected curriculum from the recorded reason through correction, acceptance and publication."/><div style={{ display: 'grid', gap: 14 }}>{items.map((item) => { const current = stage[item.id] ?? 0; return <div className="surface" style={{ padding: 20 }} key={item.id}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 14 }}><div><span className="eyebrow">Curriculum improvement</span><h2 className="font-display" style={{ fontSize: 18, margin: '7px 0' }}>{item.name}</h2><p className="muted" style={{ margin: 0, fontSize: 11 }}>Institute: {item.institute}</p></div><StatusBadge status={stages[current] === 'Published' ? 'Published' : stages[current] === 'Accepted' ? 'Accepted' : 'Changes Requested'}/></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 18 }}><div><span className="eyebrow">Why it was rejected</span><p style={{ fontSize: 12, lineHeight: 1.55 }}>{item.issue}</p></div><div><span className="eyebrow">Defined solution</span><p style={{ fontSize: 12, lineHeight: 1.55 }}>{item.solution}</p></div></div><div className="improvement-stepper">{stages.map((label, index) => <div className={`improvement-step ${index <= current ? 'complete' : ''}`} key={label}><span>{index < current ? <Check size={13}/> : index + 1}</span><small>{label}</small></div>)}</div><button className="btn btn-primary" style={{ marginTop: 18 }} disabled={current >= stages.length - 1} onClick={() => { const next = Math.min(stages.length - 1, current + 1); setStage({ ...stage, [item.id]: next }); notify(`${item.name} moved to ${stages[next]}.`); }} data-testid="button-progress-improvement"><ArrowRight size={14}/> {current >= stages.length - 1 ? 'Published' : `Move to ${stages[current + 1]}`}</button></div>; })}</div></div>;
+    const [curriculumId, setCurriculumId] = useState(analyzerScoreHistory[0].curriculumId);
+    const item = analyzerScoreHistory.find((record) => record.curriculumId === curriculumId) ?? analyzerScoreHistory[0];
+    const first = item.versions[0];
+    const latest = item.versions[item.versions.length - 1];
+    const improvement = latest.score - first.score;
+    const previous = item.versions[item.versions.length - 2];
+    const recentChange = latest.score - previous.score;
+    return <div className="content"><PageHeader eyebrow="Designer / Continuous improvement" title="Improvement tracker" detail="Compare every analyzed curriculum version and see the score improvement created by completed revisions." action={<button className="btn" onClick={() => notify('Analyzer score history refreshed.')} data-testid="button-refresh-improvement"><RefreshCw size={14}/> Refresh history</button>}/><div className="surface" style={{ padding: 8, display: 'flex', gap: 5, overflowX: 'auto', marginBottom: 15 }}>{analyzerScoreHistory.map((record) => <button key={record.curriculumId} className={`btn ${record.curriculumId === curriculumId ? 'btn-primary' : 'btn-ghost'}`} style={{ whiteSpace: 'nowrap', padding: '0 12px' }} onClick={() => setCurriculumId(record.curriculumId)} data-testid={`tab-improvement-${record.curriculumId}`}>{record.name}</button>)}</div><div className="improvement-summary"><div className="surface improvement-score-card"><span className="eyebrow">Latest analyzer score</span><strong>{latest.score}<small>/100</small></strong><span className="muted">v{latest.version} · {latest.analyzedOn}</span></div><div className="surface improvement-score-card positive"><span className="eyebrow">Total improvement</span><strong>+{improvement}<small> points</small></strong><span className="muted">From v{first.version} ({first.score}) to v{latest.version}</span></div><div className="surface improvement-score-card"><span className="eyebrow">Last version change</span><strong>{recentChange > 0 ? '+' : ''}{recentChange}<small> points</small></strong><span className="muted">Since v{previous.version} ({previous.score})</span></div></div><SectionCard title={`${item.name} — analyzer score history`}><p className="muted" style={{ fontSize: 11, marginTop: -5 }}>Institute: {item.institute}. Each point is recorded from a completed Curriculum Analyzer run.</p><div className="version-score-chart" aria-label="Analyzer score by curriculum version">{item.versions.map((version) => <div className="version-score-column" key={version.version}><div className="version-score-value">{version.score}</div><div className="version-score-bar"><span style={{ height: `${version.score}%` }}/></div><strong>v{version.version}</strong></div>)}</div><div className="table-scroll"><table className="data-table"><thead><tr><th>Version</th><th>Analyzer score</th><th>Change from prior version</th><th>Findings resolved</th><th>Analyzed on</th></tr></thead><tbody>{item.versions.map((version, index) => { const delta = index ? version.score - item.versions[index - 1].score : null; return <tr key={version.version}><td><strong>v{version.version}</strong>{index === item.versions.length - 1 && <span className="badge badge-lavender" style={{ marginLeft: 8 }}>Current</span>}</td><td><strong>{version.score}</strong><span className="muted"> /100</span></td><td>{delta === null ? <span className="muted">Baseline</span> : <span className={delta > 0 ? 'score-gain' : 'muted'}>{delta > 0 ? '+' : ''}{delta} points</span>}</td><td>{version.findingsResolved}</td><td>{version.analyzedOn}</td></tr>; })}</tbody></table></div></SectionCard></div>;
 }
 function PublishedPage() { return <div className="content"><PageHeader eyebrow="Designer / Public record" title="Published curricula" detail="Versions currently visible to their explicitly selected institutes."/><SectionCard title="Published catalogue"><CurriculumTable items={mockCurricula.filter((item) => item.status === 'Published' || item.status === 'Approved')} onAction={() => undefined}/></SectionCard></div>; }
 function InstituteCurricula() {
