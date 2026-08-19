@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from langchain_core.documents import Document
 from langchain_groq import ChatGroq
@@ -8,9 +8,14 @@ from langchain_mongodb import MongoDBAtlasVectorSearch
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from backend.core.config import get_settings
-from backend.data.database import get_collection
+from backend.data.database import get_aicte_collection, get_designer_collection
 from backend.models.schemas import Source
-from backend.services.document_service import is_document_indexed, register_document
+from backend.services.document_service import (
+    generate_document_id,
+    is_document_indexed,
+    register_document,
+)
+from backend.services.pdf_service import PdfPage
 
 
 @lru_cache(maxsize=1)
@@ -40,37 +45,124 @@ def get_text_splitter() -> RecursiveCharacterTextSplitter:
     )
 
 
-def get_vectorstore() -> MongoDBAtlasVectorSearch:
-    settings = get_settings()
+def _make_vectorstore(
+    collection,
+    index_name: str,
+) -> MongoDBAtlasVectorSearch:
     return MongoDBAtlasVectorSearch(
-        collection=get_collection(),
+        collection=collection,
         embedding=get_embeddings(),
-        index_name=settings.mongodb_vector_index,
+        index_name=index_name,
         text_key="text",
         embedding_key="embedding",
     )
 
 
-def process_and_store_pdf(text: str, filename: str) -> Tuple[int, bool]:
-    existing_chunks = is_document_indexed(filename)
+def get_aicte_vectorstore() -> MongoDBAtlasVectorSearch:
+    settings = get_settings()
+    return _make_vectorstore(
+        get_aicte_collection(), settings.aicte_mongodb_vector_index
+    )
+
+
+def get_designer_vectorstore() -> MongoDBAtlasVectorSearch:
+    settings = get_settings()
+    return _make_vectorstore(
+        get_designer_collection(), settings.curriculum_mongodb_vector_index
+    )
+
+
+def get_vectorstore(source_type: str = "aicte_reference") -> MongoDBAtlasVectorSearch:
+    if source_type == "aicte_reference":
+        return get_aicte_vectorstore()
+    if source_type == "submitted_curriculum":
+        return get_designer_vectorstore()
+    raise ValueError(f"Unsupported source_type: {source_type}")
+
+
+def process_and_store_pdf(
+    text: str,
+    filename: str,
+    *,
+    pages: Optional[List[PdfPage]] = None,
+    document_id: Optional[str] = None,
+    source_type: str = "aicte_reference",
+    programme: str = "B.Tech",
+    branch: str = "CSE",
+    curriculum_id: Optional[str] = None,
+    year: Optional[int] = None,
+    version: Optional[str] = None,
+    owner_id: Optional[str] = None,
+) -> Tuple[int, bool]:
+    if source_type == "submitted_curriculum" and not owner_id:
+        raise ValueError("Authenticated owner_id is required for submitted curricula")
+    existing_chunks = is_document_indexed(
+        filename,
+        source_type=source_type,
+        owner_id=owner_id,
+    )
     if existing_chunks is not None:
         return existing_chunks, True
 
-    document = Document(page_content=text, metadata={"source": filename})
-    chunks = get_text_splitter().split_documents([document])
+    resolved_document_id = document_id or generate_document_id(text.encode("utf-8"))
+    base_metadata = {
+        "source": filename,
+        "document_id": resolved_document_id,
+        "source_type": source_type,
+        "programme": programme,
+        "branch": branch,
+        "curriculum_id": curriculum_id,
+        "year": year,
+        "version": version,
+        "heading": None,
+        "section_path": None,
+    }
+    if source_type == "submitted_curriculum":
+        base_metadata["owner_id"] = owner_id
+    if pages:
+        documents = [
+            Document(
+                page_content=f"Page {page.page_number}\n{page.text}",
+                metadata={**base_metadata, "page_number": page.page_number},
+            )
+            for page in pages
+        ]
+    else:
+        # Retains compatibility for direct callers that provide flattened text.
+        documents = [
+            Document(
+                page_content=text,
+                metadata={**base_metadata, "page_number": None},
+            )
+        ]
+
+    chunks = get_text_splitter().split_documents(documents)
     if not chunks:
         raise RuntimeError("The PDF did not produce any indexable chunks")
 
     for index, chunk in enumerate(chunks):
         chunk.metadata.update({"source": filename, "chunk_index": index})
 
-    get_vectorstore().add_documents(chunks)
-    register_document(filename, len(chunks))
+    get_vectorstore(source_type).add_documents(chunks)
+    register_document(
+        filename,
+        len(chunks),
+        document_id=resolved_document_id,
+        source_type=source_type,
+        programme=programme,
+        branch=branch,
+        curriculum_id=curriculum_id,
+        year=year,
+        version=version,
+        owner_id=owner_id,
+    )
     return len(chunks), False
 
 
 def retrieve_context(query: str) -> List[Document]:
-    vectorstore = get_vectorstore()
+    # The assistant is an official-reference assistant and must never search
+    # private Designer vectors.
+    vectorstore = get_aicte_vectorstore()
     retriever = vectorstore.as_retriever(search_kwargs={"k": get_settings().retrieval_k})
     return retriever.invoke(query)
 

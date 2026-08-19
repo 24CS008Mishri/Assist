@@ -1,7 +1,13 @@
 from datetime import datetime
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+
+class DocumentSourceType(str, Enum):
+    AICTE_REFERENCE = "aicte_reference"
+    SUBMITTED_CURRICULUM = "submitted_curriculum"
 
 
 class QuestionRequest(BaseModel):
@@ -34,6 +40,13 @@ class AssistantResponse(BaseModel):
 
 class UploadResponse(BaseModel):
     filename: str
+    document_id: str
+    source_type: DocumentSourceType
+    programme: str
+    branch: str
+    curriculum_id: Optional[str] = None
+    year: Optional[int] = None
+    version: Optional[str] = None
     message: str
     total_chunks: int
     already_indexed: bool = False
@@ -44,6 +57,13 @@ class DocumentRecord(BaseModel):
     total_chunks: int
     uploaded_at: Optional[datetime] = None
     status: str = "Active"
+    document_id: Optional[str] = None
+    source_type: Optional[DocumentSourceType] = None
+    programme: Optional[str] = None
+    branch: Optional[str] = None
+    curriculum_id: Optional[str] = None
+    year: Optional[int] = None
+    version: Optional[str] = None
 
 
 class LoginRequest(BaseModel):

@@ -21,7 +21,7 @@ export default defineConfig({
     proxy: {
       // Lets the frontend call /api/... during `vite dev` without CORS setup.
       '/api': {
-        target: 'http://127.0.0.1:8010',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
     },
