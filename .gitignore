@@ -10,8 +10,10 @@ dist/
 downloads/
 eggs/
 .eggs/
-/lib/
-/lib64/
+lib/
+!frontend/src/lib/
+!frontend/src/lib/*.js
+lib64/
 parts/
 sdist/
 var/

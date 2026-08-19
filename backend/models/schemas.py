@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -14,8 +14,14 @@ class QuestionRequest(BaseModel):
     query: str = Field(..., min_length=1)
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=4000)
+
+
 class AssistantRequest(BaseModel):
     question: str = Field(..., min_length=1)
+    history: List[ChatMessage] = Field(default_factory=list, max_length=12)
 
 
 class Source(BaseModel):
@@ -67,5 +73,5 @@ class DocumentRecord(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    role: str
-    email: Optional[str] = None
+    email: str
+    password: str

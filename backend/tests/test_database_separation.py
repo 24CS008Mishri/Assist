@@ -120,6 +120,14 @@ class FakeVectorStore:
         self.retriever.invoke.return_value = []
         return self.retriever
 
+    def similarity_search_with_score(self, query, k):
+        return []
+
+    def max_marginal_relevance_search(
+        self, query, *, k, fetch_k, lambda_mult
+    ):
+        return []
+
 
 def curriculum_chunk(owner_id="designer-a", curriculum_id="shared-curriculum"):
     return {

@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 
 from backend.models.schemas import LoginRequest
 
@@ -6,10 +6,10 @@ from backend.models.schemas import LoginRequest
 router = APIRouter(prefix="/api", tags=["demo"])
 
 USERS = [
-    {"id": "u1", "name": "Meera Nair", "email": "meera.nair@aicte.gov.in", "organization": "AICTE Headquarters", "role": "admin", "status": "Active"},
-    {"id": "u2", "name": "Dr. Arvind Rao", "email": "arvind.rao@review.panel", "organization": "National Review Panel", "role": "reviewer", "status": "Active"},
-    {"id": "u3", "name": "Ananya Iyer", "email": "ananya.iyer@curriculum.lab", "organization": "Curriculum Design Cell", "role": "designer", "status": "Active"},
-    {"id": "u4", "name": "Rohan Kulkarni", "email": "rohan.k@institute.edu", "organization": "Northstar Institute of Technology", "role": "institute", "status": "Active"},
+    {"id": "u1", "name": "Meera Nair", "email": "meera.nair@aicte.gov.in", "password": "governance2026", "organization": "AICTE Headquarters", "role": "admin", "status": "Active"},
+    {"id": "u2", "name": "Dr. Arvind Rao", "email": "arvind.rao@review.panel", "password": "governance2026", "organization": "National Review Panel", "role": "reviewer", "status": "Active"},
+    {"id": "u3", "name": "Ananya Iyer", "email": "ananya.iyer@curriculum.lab", "password": "governance2026", "organization": "Curriculum Design Cell", "role": "designer", "status": "Active"},
+    {"id": "u4", "name": "Rohan Kulkarni", "email": "rohan.k@institute.edu", "password": "governance2026", "organization": "Northstar Institute of Technology", "role": "institute", "status": "Active"},
 ]
 
 CURRICULA = [
@@ -27,7 +27,7 @@ CHANGES = [
 
 @router.get("/users")
 def list_users():
-    return USERS
+    return [{key: value for key, value in user.items() if key != "password"} for user in USERS]
 
 
 @router.get("/curricula")
@@ -42,10 +42,12 @@ def list_changes():
 
 @router.post("/login")
 def login(request: LoginRequest):
-    user = next((item for item in USERS if item["role"] == request.role), USERS[0])
+    user = next((item for item in USERS if item["email"].lower() == request.email.strip().lower() and item["password"] == request.password), None)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     return {
         "name": user["name"],
-        "email": request.email or user["email"],
-        "role": request.role,
+        "email": user["email"],
+        "role": user["role"],
         "organization": user["organization"],
     }

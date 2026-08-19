@@ -157,7 +157,7 @@ async def assistant_endpoint(request: AssistantRequest) -> AssistantResponse:
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
     try:
-        answer, sources = answer_question(question)
+        answer, sources = answer_question(question, request.history)
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
