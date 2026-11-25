@@ -24,6 +24,11 @@ class RuleType(str, Enum):
     ANALYZER_DERIVED = "ANALYZER_DERIVED"
 
 
+class AvailabilityPolicy(str, Enum):
+    REQUIRED = "required"
+    SCOPE_DEPENDENT = "scope_dependent"
+
+
 class AicteEvidenceReference(BaseModel):
     source: str
     page_number: Optional[int] = None
@@ -37,6 +42,7 @@ class ScoringCheck(BaseModel):
     criterion: str
     title: str
     rule_type: RuleType
+    availability_policy: AvailabilityPolicy = AvailabilityPolicy.REQUIRED
     status: CheckStatus
     obtained_marks: Optional[float] = None
     maximum_marks: float

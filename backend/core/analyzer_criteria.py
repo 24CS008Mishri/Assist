@@ -2,11 +2,13 @@ from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
 
-SCORING_VERSION = "cse_v1"
+SCORING_VERSION = "cse_v2"
 
 AICTE_MANDATORY = "AICTE_MANDATORY"
 AICTE_MODEL_REFERENCE = "AICTE_MODEL_REFERENCE"
 ANALYZER_DERIVED = "ANALYZER_DERIVED"
+REQUIRED = "required"
+SCOPE_DEPENDENT = "scope_dependent"
 
 # Until an official excerpt clearly establishes a binding requirement, the
 # existing Phase 3 AICTE checks are model-curriculum comparisons, not mandates.
@@ -62,6 +64,55 @@ MIN_CATEGORY_COVERAGE_RATIO = 0.60
 REASONABLE_SEMESTER_CREDIT_RANGE = (15, 26)
 REASONABLE_PRACTICAL_SHARE_RANGE = (0.20, 0.45)
 
+SKILL_CHECK_IDS = {
+    "skills.programming",
+    "skills.data_structures_algorithms",
+    "skills.mathematical_foundations",
+    "skills.computer_architecture",
+    "skills.operating_systems",
+    "skills.databases",
+    "skills.computer_networks",
+    "skills.theory_computation",
+    "skills.compiler_processing",
+    "skills.machine_learning_data",
+    "skills.cyber_security",
+    "skills.software_development",
+    "skills.projects_practical",
+}
+
+# These checks cannot be judged fairly from a single-semester upload.
+FULL_PROGRAM_CHECK_IDS = {
+    "structure.semesters",
+    "structure.total_credits",
+    "structure.category_distribution",
+    "structure.professional_core",
+    "structure.professional_elective",
+    "structure.open_elective",
+    "structure.project_internship",
+    "compliance.induction",
+    "compliance.environment",
+    "compliance.constitution_ikt",
+    "compliance.human_values",
+    "compliance.mandatory_non_credit",
+    "compliance.essential_core",
+    *SKILL_CHECK_IDS,
+}
+
+# These checks apply only when the relevant component occurs within the
+# submitted scope. Their absence in a partial curriculum is not a failure.
+CONDITIONAL_LOCAL_CHECK_IDS = {
+    "compliance.internship",
+    "compliance.project",
+    "industry.projects",
+    "industry.internship",
+    "industry.emerging_electives",
+    "assessment.project_evaluation",
+    "assessment.internship_evaluation",
+    "assessment.practical_alignment",
+    "resources.online_learning",
+    "resources.project_lab",
+}
+
 
 @dataclass(frozen=True)
 class CheckDefinition:
@@ -72,6 +123,7 @@ class CheckDefinition:
     rule_type: str
     expected: Any
     baseline_note: str
+    availability_policy: str
 
 
 def _check(
@@ -91,6 +143,11 @@ def _check(
         rule_type=rule_type,
         expected=expected,
         baseline_note=baseline_note,
+        availability_policy=(
+            SCOPE_DEPENDENT
+            if check_id in FULL_PROGRAM_CHECK_IDS | CONDITIONAL_LOCAL_CHECK_IDS
+            else REQUIRED
+        ),
     )
 
 
@@ -125,7 +182,7 @@ CHECK_DEFINITIONS: Tuple[CheckDefinition, ...] = (
     # Learning outcomes: 100 marks
     _check("outcomes.course_coverage", "learning_outcomes", "Courses with stated outcomes", 35, ANALYZER_DERIVED, "Outcomes for at least 90% of courses", "Analyzer scoring weight based on extractable outcome coverage; not an AICTE percentage."),
     _check("outcomes.objective_coverage", "learning_outcomes", "Courses with stated objectives", 20, ANALYZER_DERIVED, "Objectives for at least 90% of courses", "Analyzer scoring weight based on extractable objective coverage."),
-    _check("outcomes.density", "learning_outcomes", "Outcome coverage density", 15, ANALYZER_DERIVED, "At least 4 outcomes per documented course", "Analyzer-derived structural density target; no semantic quality claim is made."),
+    _check("outcomes.density", "learning_outcomes", "Outcome coverage density", 15, ANALYZER_DERIVED, "Average of at least 4 outcomes across documented courses", "Analyzer-derived structural density target; no semantic quality claim is made."),
     _check("outcomes.action_verbs", "learning_outcomes", "Action-oriented outcome wording", 15, ANALYZER_DERIVED, "At least 80% of outcomes contain a recognized action verb", "Deterministic verb-presence check; this is not deep Bloom's-taxonomy analysis."),
     _check("outcomes.core_course_coverage", "learning_outcomes", "Core courses with outcomes", 15, ANALYZER_DERIVED, "Outcomes present for at least 90% of detected core courses", "Analyzer-derived completeness check for detected major CSE core courses."),
     # Assessment: 100 marks

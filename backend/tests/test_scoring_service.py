@@ -9,7 +9,11 @@ from backend.models.analyzer_schemas import (
     Semester,
     StructuredCurriculum,
 )
-from backend.models.analyzer_scoring_schemas import CheckStatus, DocumentScope
+from backend.models.analyzer_scoring_schemas import (
+    AvailabilityPolicy,
+    CheckStatus,
+    DocumentScope,
+)
 from backend.services.aicte_evidence_service import enrich_score_with_aicte_evidence
 from backend.services.scoring_service import score_structured_curriculum
 
@@ -142,6 +146,10 @@ class ScoringServiceTests(unittest.TestCase):
                 check.deduction_reason,
                 "Not evaluable from a partial curriculum document.",
             )
+            self.assertEqual(
+                check.availability_policy,
+                AvailabilityPolicy.SCOPE_DEPENDENT,
+            )
 
         for check_id in (
             "structure.semester_distribution",
@@ -150,6 +158,15 @@ class ScoringServiceTests(unittest.TestCase):
             "industry.machine_learning",
         ):
             self.assertEqual(_check(score, check_id).status, CheckStatus.PASS)
+
+        self.assertEqual(
+            _check(score, "structure.semester_distribution").availability_policy,
+            AvailabilityPolicy.REQUIRED,
+        )
+        self.assertEqual(
+            _check(score, "assessment.project_evaluation").status,
+            CheckStatus.NOT_EVALUABLE,
+        )
 
         observed_skill = _check(score, "skills.machine_learning_data")
         self.assertIn("Machine Learning", observed_skill.actual)
@@ -303,21 +320,71 @@ class ScoringServiceTests(unittest.TestCase):
         self.assertEqual(check.status, CheckStatus.PASS)
         self.assertIn("Database Management Systems", check.actual)
 
-    def test_missing_outcomes_are_not_evaluable(self):
+    def test_missing_required_outcomes_receive_zero_marks(self):
         score = score_structured_curriculum(
             _curriculum(courses=[_course("Operating Systems")])
         )
-        self.assertEqual(
-            _check(score, "outcomes.course_coverage").status,
-            CheckStatus.NOT_EVALUABLE,
-        )
+        check = _check(score, "outcomes.course_coverage")
+        self.assertEqual(check.status, CheckStatus.FAIL)
+        self.assertEqual(check.obtained_marks, 0.0)
+        self.assertEqual(check.availability_policy, AvailabilityPolicy.REQUIRED)
+        self.assertIn("Required check failed", check.deduction_reason)
 
-    def test_missing_assessment_is_not_evaluable(self):
+    def test_outcome_density_uses_average_across_documented_courses(self):
+        courses = [
+            _course(
+                "Operating Systems",
+                course_objectives=["Understand operating-system design"],
+                course_outcomes=[
+                    "Analyze process scheduling",
+                    "Design synchronization mechanisms",
+                    "Evaluate memory management",
+                ],
+            ),
+            _course(
+                "Database Management Systems",
+                course_objectives=["Understand database-system design"],
+                course_outcomes=[
+                    "Design relational schemas",
+                    "Apply normalization",
+                    "Analyze query plans",
+                    "Implement transactions",
+                    "Evaluate database security",
+                ],
+            ),
+        ]
+        score = score_structured_curriculum(_curriculum(courses=courses))
+        density = _check(score, "outcomes.density")
+
+        self.assertEqual(density.status, CheckStatus.PASS)
+        self.assertEqual(density.obtained_marks, 15.0)
+        self.assertEqual(
+            density.actual["average_outcomes_per_documented_course"], 4.0
+        )
+        learning_outcomes = _criterion(score, "learning_outcomes")
+        self.assertEqual(learning_outcomes.score, 100.0)
+        self.assertEqual(learning_outcomes.evaluation_coverage, 100.0)
+
+    def test_missing_required_assessment_receives_zero_marks(self):
         score = score_structured_curriculum(
             _curriculum(courses=[_course("Operating Systems", practical_hours=2)])
         )
-        for check in _criterion(score, "assessment").checks:
-            self.assertEqual(check.status, CheckStatus.NOT_EVALUABLE)
+        for check_id in (
+            "assessment.course_coverage",
+            "assessment.theory_practical",
+            "assessment.practical_alignment",
+        ):
+            check = _check(score, check_id)
+            self.assertEqual(check.status, CheckStatus.FAIL)
+            self.assertEqual(check.obtained_marks, 0.0)
+        for check_id in (
+            "assessment.project_evaluation",
+            "assessment.internship_evaluation",
+        ):
+            self.assertEqual(
+                _check(score, check_id).status,
+                CheckStatus.NOT_EVALUABLE,
+            )
 
     def test_assessment_checks_detect_theory_and_practical(self):
         course = _course(
@@ -388,8 +455,8 @@ class ScoringServiceTests(unittest.TestCase):
             2,
         )
         self.assertEqual(structure.score, expected)
-        self.assertEqual(structure.evaluable_maximum_marks, 15)
-        self.assertEqual(structure.evaluation_coverage, 15)
+        self.assertEqual(structure.evaluable_maximum_marks, 30)
+        self.assertEqual(structure.evaluation_coverage, 30)
         self.assertTrue(structure.low_coverage)
 
     def test_overall_score_renormalizes_evaluable_criterion_weights(self):
@@ -411,9 +478,9 @@ class ScoringServiceTests(unittest.TestCase):
 
     def test_overall_evaluation_coverage_is_weighted(self):
         score = score_structured_curriculum(_curriculum(total_credits=163))
-        # Only the 15-mark Structure credit check is evaluable. Structure has
-        # a 20% overall weight, so supported overall weight is 15% * 20% = 3%.
-        self.assertEqual(score.overall_evaluation_coverage, 3)
+        # Required checks remain evaluable failures when evidence is absent;
+        # programme-wide scope-dependent checks remain excluded.
+        self.assertEqual(score.overall_evaluation_coverage, 42.5)
         self.assertTrue(score.low_coverage)
 
     def test_aicte_model_values_are_not_classified_as_mandatory(self):
@@ -543,7 +610,7 @@ class ScoringServiceTests(unittest.TestCase):
             owner_id="designer-a",
         )
         self.assertEqual(response.curriculum_id, "xyz-cse-2026")
-        self.assertEqual(response.scoring_version, "cse_v1")
+        self.assertEqual(response.scoring_version, "cse_v2")
         evidence_mock.assert_called_once()
 
 

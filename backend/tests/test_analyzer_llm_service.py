@@ -31,7 +31,14 @@ def _score():
         programme="B.Tech",
         branch="CSE",
     )
-    return score_structured_curriculum(curriculum)
+    score = score_structured_curriculum(curriculum)
+    # LLM selection tests configure only the findings relevant to each case;
+    # neutralize other required-field failures introduced by cse_v2.
+    for criterion in score.criteria:
+        for check in criterion.checks:
+            check.status = CheckStatus.NOT_EVALUABLE
+            check.obtained_marks = None
+    return score
 
 
 def _check(score, check_id):

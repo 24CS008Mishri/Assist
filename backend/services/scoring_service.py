@@ -9,14 +9,17 @@ from backend.core.analyzer_criteria import (
     CATEGORY_ZERO_TOLERANCE_RATIO,
     CHECK_DEFINITIONS,
     COMPLIANCE_KEYWORDS,
+    CONDITIONAL_LOCAL_CHECK_IDS,
     CORE_SKILL_IDS,
     CRITERION_LABELS,
     CRITERION_WEIGHTS,
+    FULL_PROGRAM_CHECK_IDS,
     INDUSTRY_KEYWORDS,
     LOW_EVALUATION_COVERAGE_THRESHOLD,
     MIN_CATEGORY_COVERAGE_RATIO,
     REASONABLE_PRACTICAL_SHARE_RANGE,
     REASONABLE_SEMESTER_CREDIT_RANGE,
+    REQUIRED,
     SCORING_VERSION,
     SKILL_TAXONOMY,
     TOTAL_CREDIT_FULL_TOLERANCE,
@@ -36,28 +39,6 @@ from backend.models.analyzer_scoring_schemas import (
 _FULL_PROGRAM_MIN_CREDITS = 120
 _FULL_PROGRAM_MAX_CREDITS = 220
 _FULL_PROGRAM_CATEGORIES = {"HSMC", "BSC", "ESC", "PCC", "PEC", "OEC"}
-_FULL_PROGRAM_CHECK_IDS = {
-    "structure.semesters",
-    "structure.total_credits",
-    "structure.category_distribution",
-    "structure.professional_core",
-    "structure.professional_elective",
-    "structure.open_elective",
-    "structure.project_internship",
-    "compliance.induction",
-    "compliance.environment",
-    "compliance.constitution_ikt",
-    "compliance.human_values",
-    "compliance.mandatory_non_credit",
-    "compliance.essential_core",
-    *SKILL_TAXONOMY.keys(),
-}
-_CONDITIONAL_LOCAL_PRESENCE_CHECK_IDS = {
-    "compliance.internship",
-    "compliance.project",
-    "industry.projects",
-    "industry.internship",
-}
 _PROJECT_TITLE = re.compile(r"\b(?:project|capstone)\b", re.I)
 
 
@@ -302,20 +283,60 @@ def _apply_scope_constraints(
 ) -> None:
     if document_scope != DocumentScope.PARTIAL_CURRICULUM:
         return
-    for check_id in _FULL_PROGRAM_CHECK_IDS:
+    for check_id in FULL_PROGRAM_CHECK_IDS:
         evaluation = evaluations.get(check_id)
         if evaluation is not None:
             evaluations[check_id] = _partial_scope_not_evaluable(
                 evaluation.actual
             )
-    for check_id in _CONDITIONAL_LOCAL_PRESENCE_CHECK_IDS:
+    for check_id in CONDITIONAL_LOCAL_CHECK_IDS:
         evaluation = evaluations.get(check_id)
         if evaluation is not None and (
             evaluation.ratio is None or evaluation.ratio <= 0
-        ):
+        ) and not _conditional_component_present(check_id, evaluation.actual):
             evaluations[check_id] = _partial_scope_not_evaluable(
                 evaluation.actual
             )
+
+
+def _conditional_component_present(check_id: str, actual: Any) -> bool:
+    if not isinstance(actual, dict):
+        return bool(actual)
+    count_key = {
+        "assessment.project_evaluation": "total_courses",
+        "assessment.internship_evaluation": "total_courses",
+        "assessment.practical_alignment": "practical_courses",
+        "resources.project_lab": "relevant_project_lab_courses",
+    }.get(check_id)
+    return bool(count_key and (actual.get(count_key) or 0) > 0)
+
+
+def _apply_required_evidence_policy(
+    evaluations: Dict[str, _Evaluation],
+) -> None:
+    """Turn missing document-local requirements into explicit zero marks."""
+    for definition in CHECK_DEFINITIONS:
+        evaluation = evaluations.get(definition.check_id)
+        required_here = definition.availability_policy == REQUIRED or (
+            definition.check_id in CONDITIONAL_LOCAL_CHECK_IDS
+            and evaluation is not None
+            and _conditional_component_present(
+                definition.check_id, evaluation.actual
+            )
+        )
+        if not required_here or evaluation is None or evaluation.ratio is not None:
+            continue
+        detail = evaluation.reason.removeprefix("Not evaluable: ").rstrip(".")
+        evaluations[definition.check_id] = _Evaluation(
+            ratio=0.0,
+            actual=evaluation.actual,
+            reason=(
+                "Required check failed: reliable evidence was not extracted"
+                + (f" ({detail})" if detail else "")
+                + "; zero marks awarded."
+            ),
+            evidence=evaluation.evidence,
+        )
 
 
 def _structure_evaluations(
@@ -652,12 +673,18 @@ def _learning_outcome_evaluations(courses: Sequence[Course]) -> Dict[str, _Evalu
             _course_evidence(outcome_courses),
             f"{len(outcome_courses)} of {len(courses)} courses have extracted outcomes",
         )
-        density = sum(min(len(course.course_outcomes) / 4.0, 1.0) for course in outcome_courses) / len(outcome_courses)
+        total_outcomes = sum(len(course.course_outcomes) for course in outcome_courses)
+        average_outcomes = total_outcomes / len(outcome_courses)
+        density = min(average_outcomes / 4.0, 1.0)
         result["outcomes.density"] = _ratio_evaluation(
             density,
-            {"average_outcomes_per_documented_course": _round(sum(len(c.course_outcomes) for c in outcome_courses) / len(outcome_courses))},
+            {
+                "average_outcomes_per_documented_course": _round(average_outcomes),
+                "documented_courses": len(outcome_courses),
+                "total_outcomes": total_outcomes,
+            },
             _course_evidence(outcome_courses),
-            "documented courses were compared with the four-outcome analyzer target",
+            "the average outcome count across documented courses was compared with the four-outcome analyzer target",
         )
         outcomes = [value for course in outcome_courses for value in course.course_outcomes]
         action_pattern = re.compile(
@@ -719,13 +746,6 @@ def _assessment_evaluations(
     if not courses:
         return {check_id: _not_evaluable("no courses were extracted") for check_id in check_ids}
     assessed = [course for course in courses if course.assessment_information]
-    if not assessed:
-        return {
-            check_id: _not_evaluable(
-                "no assessment information was extracted; absence cannot be distinguished from extraction failure"
-            )
-            for check_id in check_ids
-        }
     result: Dict[str, _Evaluation] = {}
     coverage = len(assessed) / len(courses)
     result["assessment.course_coverage"] = _ratio_evaluation(
@@ -860,7 +880,8 @@ def _resource_evaluations(
         semantic = [course for course in relevant if course.references or course.topics or course.modules]
         if not semantic:
             result["resources.project_lab"] = _not_evaluable(
-                "project/lab courses lack extractable resource-bearing fields"
+                "project/lab courses lack extractable resource-bearing fields",
+                {"relevant_project_lab_courses": len(relevant)},
             )
         else:
             resource_courses = [
@@ -919,6 +940,7 @@ def _build_check(definition: CheckDefinition, evaluation: _Evaluation) -> Scorin
         criterion=definition.criterion,
         title=definition.title,
         rule_type=definition.rule_type,
+        availability_policy=definition.availability_policy,
         status=status,
         obtained_marks=obtained,
         maximum_marks=definition.maximum_marks,
@@ -942,6 +964,7 @@ def score_structured_curriculum(curriculum: StructuredCurriculum) -> AnalyzerSco
     evaluations.update(_resource_evaluations(curriculum, courses))
     evaluations.update(_skill_evaluations(curriculum, courses))
     _apply_scope_constraints(evaluations, document_scope)
+    _apply_required_evidence_policy(evaluations)
 
     criteria: List[CriterionScore] = []
     for criterion, weight in CRITERION_WEIGHTS.items():

@@ -45,6 +45,11 @@ test('unavailable LLM issues retain deterministic scoring presentation', () => {
 test('modal exposes score, coverage, evidence, and not-evaluable exclusion', () => {
   assert.match(appSource, /criterionCalculation\(criterion\)/);
   assert.match(appSource, /coverageCalculation\(criterion\)/);
+  assert.match(appSource, /Evaluated score \(quality\)/);
+  assert.match(appSource, /Evaluation coverage \(evidence completeness\)/);
+  assert.match(appSource, /Required checks receive zero marks/);
+  assert.match(appSource, /SCOPE DEPENDENT/);
+  assert.match(appSource, /Missing reliable evidence for this check receives zero marks/);
   assert.match(appSource, /AICTE Evidence/);
   assert.match(appSource, /Curriculum Evidence/);
   assert.match(appSource, /Excluded from score/);
