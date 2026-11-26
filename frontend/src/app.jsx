@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, Router as WouterRouter, useLocation } from 'wouter';
-import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, Menu, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UserCog, Users, X } from 'lucide-react';
-import { analyzerScoreHistory, mockChanges, mockCurricula, mockService, mockUsers, sourceCards } from '@/lib/mock-services';
+import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, Menu, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, Sparkles, Trash2, Upload, UserCog, Users, X } from 'lucide-react';
+import { mockService } from '@/lib/mock-services';
 import { analyzerDocumentHref, analyzerDocumentKey, checkStatusLabel, coverageCalculation, criterionCalculation, criterionScoreLabel, documentScopeLabel, hasLowEvaluationCoverage, isPartialCurriculum, isPartialScopeExclusion, overallScoreLabel, requestedAnalyzerDocument, submittedCurriculumDocuments } from '@/lib/analyzer-utils';
 const roles = {
     admin: { label: 'AICTE Admin', short: 'Admin', base: '/admin/dashboard', description: 'Authoritative governance and national oversight', icon: Landmark },
@@ -11,8 +11,8 @@ const roles = {
 };
 const permissions = {
     admin: ['documents.read', 'documents.create', 'documents.update', 'documents.delete', 'policies.read', 'policies.create', 'policies.update', 'institutes.read', 'institutes.create', 'users.manage', 'audit.read', 'curricula.read'],
-    reviewer: ['curricula.read', 'reviews.read', 'reviews.decide', 'screening.read', 'published.read', 'policies.read', 'policies.manage'],
-    designer: ['curricula.read', 'curricula.create', 'curricula.update', 'curricula.submit', 'ai.use', 'resources.use', 'comparison.use', 'analyzer.use', 'changes.respond', 'published.read'],
+    reviewer: ['curricula.read', 'reviews.read', 'reviews.decide', 'published.read', 'policies.read', 'policies.manage', 'analyzer.use'],
+    designer: ['curricula.read', 'curricula.create', 'curricula.update', 'curricula.submit', 'ai.use', 'resources.use', 'comparison.use', 'changes.respond', 'published.read'],
     institute: ['published.read', 'courses.read', 'coordinator.assign', 'changes.create', 'feedback.create'],
 };
 const navByRole = {
@@ -25,7 +25,8 @@ const navByRole = {
     ],
     reviewer: [
         { label: 'Dashboard', href: '/reviewer/dashboard', icon: LayoutDashboard }, { label: 'Pending Reviews', href: '/reviewer/reviews', icon: Inbox, permission: 'reviews.read' },
-        { label: 'Curriculum Screener', href: '/reviewer/screener', icon: SlidersHorizontal, permission: 'screening.read' }, { label: 'Review History', href: '/reviewer/history', icon: History },
+        { label: 'Curriculum Analyzer', href: '/reviewer/analyzer', icon: BarChart3, permission: 'analyzer.use' }, { label: 'Review History', href: '/reviewer/history', icon: History },
+        { label: 'Change Requests', href: '/reviewer/changes', icon: RefreshCw },
         { label: 'Policies', href: '/reviewer/policies', icon: ShieldCheck, permission: 'policies.read' }, { label: 'Approved Curricula', href: '/reviewer/approved', icon: CheckCircle2, permission: 'published.read' },
         { label: 'Settings', href: '/reviewer/settings', icon: Settings },
     ],
@@ -33,13 +34,13 @@ const navByRole = {
         { label: 'Dashboard', href: '/designer/dashboard', icon: LayoutDashboard }, { label: 'My Curricula', href: '/designer/curricula', icon: FolderKanban },
         { label: 'Create Curriculum', href: '/designer/create', icon: Plus, permission: 'curricula.create' }, { label: 'AI Assistant', href: '/designer/assistant', icon: Bot, permission: 'ai.use' },
         { label: 'Resource Assistant', href: '/designer/resources', icon: BookMarked, permission: 'resources.use' }, { label: 'Curriculum Comparison', href: '/designer/comparison', icon: Network, permission: 'comparison.use' },
-        { label: 'Curriculum Analyzer', href: '/designer/analyzer', icon: BarChart3, permission: 'analyzer.use' }, { label: 'Change Requests', href: '/designer/changes', icon: RefreshCw },
+        { label: 'Change Requests', href: '/designer/changes', icon: RefreshCw },
         { label: 'Improvement Tracker', href: '/designer/improvements', icon: Activity, permission: 'curricula.update' },
         { label: 'Published Curricula', href: '/designer/published', icon: CheckCircle2, permission: 'published.read' },
         { label: 'Settings', href: '/designer/settings', icon: Settings },
     ],
     institute: [
-        { label: 'Dashboard', href: '/institute/dashboard', icon: LayoutDashboard }, { label: 'Available Curricula', href: '/institute/curricula', icon: BookOpen, permission: 'published.read' },
+        { label: 'Dashboard', href: '/institute/dashboard', icon: LayoutDashboard }, { label: 'Portal Upload', href: '/institute/submit', icon: Upload }, { label: 'Available Curricula', href: '/institute/curricula', icon: BookOpen, permission: 'published.read' },
         { label: 'My Courses', href: '/institute/courses', icon: ListChecks, permission: 'courses.read' }, { label: 'Course Coordinators', href: '/institute/coordinators', icon: UserCog, permission: 'coordinator.assign' },
         { label: 'Change Requests', href: '/institute/changes', icon: RefreshCw, permission: 'changes.create' }, { label: 'Feedback', href: '/institute/feedback', icon: MessageSquareText, permission: 'feedback.create' },
         { label: 'Settings', href: '/institute/settings', icon: Settings },
@@ -73,7 +74,7 @@ function Portal() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const notify = (message) => { setToast(message); window.setTimeout(() => setToast(''), 2600); };
     const login = async (email, password) => {
-        // The account record—not a client-selected role—determines the workspace.
+        // The account recordâ€”not a client-selected roleâ€”determines the workspace.
         const next = await mockService.login(email, password);
         localStorage.setItem('aicte-demo-session', JSON.stringify(next));
         setSession(next);
@@ -108,18 +109,26 @@ function AuthPage({ mode, onLogin }) {
     const [, setLocation] = useLocation();
     const [show, setShow] = useState(false);
     const [authError, setAuthError] = useState('');
-    const [submitted, setSubmitted] = useState(false);
-    const [emailSent, setEmailSent] = useState(false);
-    const title = mode === 'signup' ? 'Create a governed workspace' : mode === 'forgot-password' ? 'Recover access' : mode === 'reset-password' ? 'Set a new password' : 'Curriculum truth, with a human in the loop.';
-    if (submitted || emailSent)
-        return <div className="auth-wrap grain"><div className="surface" style={{ maxWidth: 520, padding: 42, textAlign: 'center' }}><div className="brand-mark" style={{ margin: '0 auto 18px' }}><Check size={21} /></div><p className="eyebrow">Request recorded</p><h1 className="page-title" style={{ margin: '8px 0 12px' }}>{mode === 'forgot-password' ? 'Check your inbox' : 'Workspace ready'}</h1><p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>{mode === 'forgot-password' ? 'A secure reset link has been sent to the address provided. This demo accepts any email.' : 'Your demo account is configured. Please sign in using your work email.'}</p><button className="btn btn-primary" style={{ marginTop: 22 }} onClick={() => setLocation('/login')} data-testid="button-auth-continue">Continue to sign in</button></div></div>;
+    const [authLoading, setAuthLoading] = useState(false);
+    const title = 'Curriculum truth, with a human in the loop.';
+    const handleLogin = async event => {
+        event.preventDefault();
+        if (authLoading) return;
+        const form = event.currentTarget;
+        const email = form.elements.namedItem('email').value;
+        const password = form.elements.namedItem('password').value;
+        setAuthError(''); setAuthLoading(true);
+        try { await onLogin(email, password); }
+        catch (error) {
+            setAuthError(error.status === 401 ? 'Incorrect email address or password.' : 'Sign-in is temporarily unavailable. Please try again.');
+            setAuthLoading(false);
+        }
+    };
+    if (mode !== 'login') return <div className="auth-wrap grain"><div className="surface" style={{ maxWidth: 520, padding: 36, textAlign: 'center' }}><div className="brand-mark" style={{ margin: '0 auto 18px' }}><LockKeyhole size={20} /></div><p className="eyebrow">Account support</p><h1 className="page-title" style={{ margin: '8px 0 12px' }}>{mode === 'signup' ? 'Request an account' : 'Password help'}</h1><p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>{mode === 'signup' ? 'Accounts are provisioned by an Admin. Ask your organization?s administrator to create and link your account.' : 'Online password recovery is not configured. Contact your organization?s administrator for help.'}</p><button className="btn btn-primary" style={{ marginTop: 22 }} onClick={() => setLocation('/login')} data-testid="button-auth-continue">Back to sign in</button></div></div>;
     return <div className="auth-wrap grain"><div className="auth-panel">
-        <section className="auth-visual"><div><div style={{ display: 'flex', alignItems: 'center', gap: 11 }}><div className="brand-mark"><Landmark size={19} /></div><strong className="font-display">AICTE GOV</strong></div><div style={{ marginTop: 86 }}><p className="eyebrow" style={{ color: '#e7daf4' }}>National academic governance</p><h1 style={{ font: '700 42px/1.03 var(--app-font-display)', letterSpacing: '-.055em', margin: '12px 0 16px' }}> Easier way to Manage curriculum.</h1><p style={{ color: 'rgba(255,255,255,.7)', maxWidth: 310, lineHeight: 1.7, fontSize: 13 }}>Authoritative sources. Visible evidence. Expert decisions. One shared record of curriculum truth.</p></div></div><div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'rgba(255,255,255,.68)', fontSize: 11 }}><ShieldCheck size={16} /> AI assistance never replaces human approval.</div></section>
-        <section className="auth-form"><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }}><div><p className="eyebrow">Demo access portal</p><h2 className="font-display" style={{ fontSize: 25, margin: '7px 0 0', letterSpacing: '-.035em' }}>{title}</h2></div><div className="brand-mark" style={{ background: '#f2eafa' }}><LockKeyhole size={19} /></div></div>
-            {mode === 'login' && <form onSubmit={async (event) => { event.preventDefault(); setAuthError(''); try { await onLogin(event.currentTarget.elements.namedItem('email').value, event.currentTarget.elements.namedItem('password').value); } catch { setAuthError('Incorrect email address or password.'); } }}><label className="label">Email address</label><input className="field" name="email" type="email" autoComplete="email" placeholder="name@organization.edu" required data-testid="input-login-email" /><label className="label" style={{ marginTop: 14 }}>Password</label><div style={{ position: 'relative' }}><input className="field" name="password" type={show ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" required style={{ paddingRight: 44 }} data-testid="input-login-password" /><button type="button" className="btn btn-ghost icon-btn" aria-label={show ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: 2, top: 2, boxShadow: 'none' }} onClick={() => setShow(!show)} data-testid="button-show-password"><Eye size={16} /></button></div>{authError && <p className="auth-error" role="alert">{authError}</p>}<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '12px 0 17px', fontSize: 11 }}><label style={{ display: 'flex', gap: 7, alignItems: 'center' }}><input type="checkbox" defaultChecked /> Remember this device</label><button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/forgot-password')} data-testid="link-forgot-password">Forgot password?</button></div><p className="muted" style={{ fontSize: 11, lineHeight: 1.5 }}>Your email identifies your assigned role and opens only that workspace.</p><button className="btn btn-primary" style={{ width: '100%', marginTop: 20, minHeight: 44 }} data-testid="button-login">Sign in <ArrowRight size={16} /></button><p className="muted" style={{ textAlign: 'center', fontSize: 11, marginTop: 18 }}>New to the portal? <button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/signup')} data-testid="link-signup">Create an account</button></p></form>}
-            {mode === 'signup' && <form onSubmit={(event) => { event.preventDefault(); const form = event.currentTarget; if (form.elements.namedItem('password').value !== form.elements.namedItem('confirmPassword').value) { form.elements.namedItem('confirmPassword').setCustomValidity('Passwords do not match'); form.reportValidity(); return; } setSubmitted(true); }} onInput={(event) => event.currentTarget.elements.namedItem('confirmPassword')?.setCustomValidity('')}><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div><label className="label">Full name</label><input className="field" autoComplete="name" required data-testid="input-signup-name" /></div><div><label className="label">Organization</label><input className="field" autoComplete="organization" required data-testid="input-signup-organization" /></div></div><label className="label" style={{ marginTop: 13 }}>Work email</label><input className="field" type="email" autoComplete="email" placeholder="name@organization.edu" required data-testid="input-signup-email" /><label className="label" style={{ marginTop: 13 }}>Password</label><input className="field" name="password" type={show ? 'text' : 'password'} autoComplete="new-password" minLength={8} placeholder="At least 8 characters" required data-testid="input-signup-password" /><label className="label" style={{ marginTop: 13 }}>Confirm password</label><input className="field" name="confirmPassword" type={show ? 'text' : 'password'} autoComplete="new-password" placeholder="Re-enter your password" required data-testid="input-signup-confirm-password" /><p className="muted" style={{ fontSize: 11, lineHeight: 1.5, margin: '16px 0' }}>Your workspace role is assigned by an administrator after account approval.</p><label style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 11, margin: '15px 0' }}><input type="checkbox" required data-testid="checkbox-signup-terms" /> I agree to the governance workspace terms.</label><button className="btn btn-primary" style={{ width: '100%' }} data-testid="button-create-account">Request account <ArrowRight size={16} /></button><button type="button" className="btn btn-ghost" style={{ width: '100%', marginTop: 6 }} onClick={() => setLocation('/login')} data-testid="link-back-login">Back to sign in</button></form>}
-            {mode === 'forgot-password' && <form onSubmit={(event) => { event.preventDefault(); setEmailSent(true); }}><p className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>Enter your work email and we will send a secure link to reset your access.</p><label className="label" style={{ marginTop: 20 }}>Work email</label><input className="field" type="email" required data-testid="input-forgot-email" /><button className="btn btn-primary" style={{ width: '100%', marginTop: 20 }} data-testid="button-send-reset">Send reset link <Send size={15} /></button><button type="button" className="btn btn-ghost" style={{ width: '100%', marginTop: 7 }} onClick={() => setLocation('/login')} data-testid="link-back-login">Return to sign in</button></form>}
-            {mode === 'reset-password' && <form onSubmit={(event) => { event.preventDefault(); setSubmitted(true); }}><label className="label">New password</label><input className="field" type="password" minLength={8} required data-testid="input-reset-password" /><label className="label" style={{ marginTop: 14 }}>Confirm password</label><input className="field" type="password" minLength={8} required data-testid="input-reset-confirm" /><button className="btn btn-primary" style={{ width: '100%', marginTop: 22 }} data-testid="button-reset-password">Update password <Check size={15} /></button></form>}
+        <section className="auth-visual"><div><div style={{ display: 'flex', alignItems: 'center', gap: 11 }}><div className="brand-mark"><Landmark size={19} /></div><strong className="font-display">AICTE GOV</strong></div><div style={{ marginTop: 86 }}><p className="eyebrow" style={{ color: '#e7daf4' }}>National academic governance</p><h1 style={{ font: '700 42px/1.03 var(--app-font-display)', letterSpacing: '-.055em', margin: '12px 0 16px' }}>Easier way to manage curriculum.</h1><p style={{ color: 'rgba(255,255,255,.7)', maxWidth: 310, lineHeight: 1.7, fontSize: 13 }}>Authoritative sources. Visible evidence. Expert decisions. One shared record of curriculum truth.</p></div></div><div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'rgba(255,255,255,.68)', fontSize: 11 }}><ShieldCheck size={16} /> AI assistance never replaces human approval.</div></section>
+        <section className="auth-form"><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }}><div><p className="eyebrow">Sign in</p><h2 className="font-display" style={{ fontSize: 25, margin: '7px 0 0', letterSpacing: '-.035em' }}>{title}</h2></div><div className="brand-mark" style={{ background: '#f2eafa' }}><LockKeyhole size={19} /></div></div>
+            <form onSubmit={handleLogin}><label className="label" htmlFor="login-email">Email address</label><input id="login-email" className="field" name="email" type="email" autoComplete="email" placeholder="name@organization.edu" required data-testid="input-login-email" /><label className="label" htmlFor="login-password" style={{ marginTop: 14 }}>Password</label><div style={{ position: 'relative' }}><input id="login-password" className="field" name="password" type={show ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" required style={{ paddingRight: 44 }} data-testid="input-login-password" /><button type="button" className="btn btn-ghost icon-btn" aria-label={show ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: 2, top: 2, boxShadow: 'none' }} onClick={() => setShow(!show)} data-testid="button-show-password"><Eye size={16} /></button></div>{authError && <p className="auth-error" role="alert">{authError}</p>}<div style={{ display: 'flex', justifyContent: 'flex-end', margin: '12px 0 17px', fontSize: 11 }}><button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/forgot-password')} data-testid="link-forgot-password">Password help</button></div><p className="muted" style={{ fontSize: 11, lineHeight: 1.5 }}>Your account role determines the workspace you can access.</p><button className="btn btn-primary" style={{ width: '100%', marginTop: 20, minHeight: 44 }} disabled={authLoading} data-testid="button-login">{authLoading ? 'Signing in?' : 'Sign in'} <ArrowRight size={16} /></button><p className="muted" style={{ textAlign: 'center', fontSize: 11, marginTop: 18 }}>Need access? <button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/signup')} data-testid="link-signup">Request an account</button></p></form>
         </section>
     </div></div>;
 }
@@ -129,11 +138,12 @@ function Unauthorized() {
 }
 function AppShell({ session, role, path, open, setOpen, onLogout, notify, toast }) {
     const [menu, setMenu] = useState(false);
+    const [, setLocation] = useLocation();
     const links = navByRole[role].filter((item) => can(role, item.permission));
     const primaryLinks = links.filter((item) => item.label !== 'Settings');
     const settingsLink = links.find((item) => item.label === 'Settings');
     const current = links.find((item) => path === item.href) ?? links.find((item) => path.startsWith(item.href)) ?? links[0];
-    return <div className="app-shell grain"><aside className={`sidebar ${open ? 'open' : ''}`}><div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '0 10px 27px', minWidth: 0 }}><div className="brand-mark"><Landmark size={18} /></div><div style={{ minWidth: 0 }}><strong className="font-display" style={{ fontSize: 14 }}>AICTE</strong><div style={{ color: 'rgba(255,255,255,.5)', fontSize: 9, marginTop: 2 }}>GOVERNANCE PORTAL</div></div><button className="btn btn-ghost icon-btn" style={{ marginLeft: 'auto', color: '#fff', display: 'none' }} onClick={() => setOpen(false)}><X size={17} /></button></div><div className="sidebar-scroll">{primaryLinks.map((item) => <Link href={item.href} key={item.href} className={`nav-link ${current?.href === item.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}><item.icon size={16} strokeWidth={1.8} /><span>{item.label}</span></Link>)}</div><div className="sidebar-footer"><div style={{ padding: '10px 13px', color: 'rgba(255,255,255,.6)', fontSize: 10, lineHeight: 1.5 }}>DEMO MODE<br /><span style={{ color: '#e7d6f7' }}>Local governance state</span></div>{settingsLink && <Link href={settingsLink.href} className={`nav-link ${current?.href === settingsLink.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid="link-nav-settings"><Settings size={16} /><span>Settings</span></Link>}<button className="nav-link" onClick={onLogout} data-testid="button-logout"><LogOut size={16} /><span>Sign out</span></button></div></aside>{open && <button className="drawer-backdrop" onClick={() => setOpen(false)} aria-label="Close navigation" />}<main className="main-area"><header className="topbar"><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button className="btn icon-btn mobile-menu" onClick={() => setOpen(true)} data-testid="button-open-navigation"><Menu size={18} /></button><div className="breadcrumb muted" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}><span>Workspace</span><ChevronRight size={13} /><strong style={{ color: 'hsl(var(--foreground))' }}>{current?.label}</strong></div></div><div className="topbar-actions"><button className="btn icon-btn notification-button" onClick={() => notify('No new alerts. You are up to date.')} aria-label="Open notifications" data-testid="button-header-notifications"><Bell size={17} /><span className="notification-dot" /></button><div style={{ position: 'relative' }}><button className="btn" style={{ padding: '4px 9px 4px 5px', gap: 8 }} onClick={() => setMenu(!menu)} data-testid="button-user-menu"><span className="brand-mark" style={{ width: 29, height: 29, borderRadius: 10, fontSize: 10, fontWeight: 700 }}>{initials(session.name)}</span><span style={{ textAlign: 'left', display: 'block' }}><strong style={{ display: 'block', fontSize: 11 }}>{session.name}</strong><small className="muted" style={{ fontSize: 9 }}>{roles[role].short}</small></span><ChevronDown size={14} /></button>{menu && <div className="surface" style={{ position: 'absolute', right: 0, top: 48, width: 230, padding: 10, zIndex: 40 }}><p className="eyebrow" style={{ padding: '4px 8px 8px' }}>Signed in workspace</p><div style={{ padding: '2px 8px 10px', fontSize: 12 }}><strong>{roles[role].label}</strong><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 3 }}>Role is assigned to your account.</span></div><button className="btn btn-ghost btn-danger" style={{ width: '100%', justifyContent: 'flex-start', marginTop: 4 }} onClick={onLogout} data-testid="button-menu-logout"><LogOut size={14} /> Sign out</button></div>}</div></div></header><PageContent role={role} path={path} notify={notify} /></main>{toast && <div className="toast-note" data-testid="status-toast"><CheckCircle size={15} style={{ verticalAlign: 'middle', marginRight: 7 }} />{toast}</div>}</div>;
+    return <div className="app-shell grain"><aside className={`sidebar ${open ? 'open' : ''}`}><div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '0 10px 27px', minWidth: 0 }}><div className="brand-mark"><Landmark size={18} /></div><div style={{ minWidth: 0 }}><strong className="font-display" style={{ fontSize: 14 }}>AICTE</strong><div style={{ color: 'rgba(255,255,255,.5)', fontSize: 9, marginTop: 2 }}>GOVERNANCE PORTAL</div></div><button className="btn btn-ghost icon-btn" style={{ marginLeft: 'auto', color: '#fff', display: 'none' }} onClick={() => setOpen(false)}><X size={17} /></button></div><div className="sidebar-scroll">{primaryLinks.map((item) => <Link href={item.href} key={item.href} className={`nav-link ${current?.href === item.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}><item.icon size={16} strokeWidth={1.8} /><span>{item.label}</span></Link>)}</div><div className="sidebar-footer"><div style={{ padding: '10px 13px', color: 'rgba(255,255,255,.6)', fontSize: 10, lineHeight: 1.5 }}>DEMO MODE<br /><span style={{ color: '#e7d6f7' }}>Local governance state</span></div>{settingsLink && <Link href={settingsLink.href} className={`nav-link ${current?.href === settingsLink.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid="link-nav-settings"><Settings size={16} /><span>Settings</span></Link>}<button className="nav-link" onClick={onLogout} data-testid="button-logout"><LogOut size={16} /><span>Sign out</span></button></div></aside>{open && <button className="drawer-backdrop" onClick={() => setOpen(false)} aria-label="Close navigation" />}<main className="main-area"><header className="topbar"><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button className="btn icon-btn mobile-menu" onClick={() => setOpen(true)} data-testid="button-open-navigation"><Menu size={18} /></button><div className="breadcrumb muted" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}><span>Workspace</span><ChevronRight size={13} /><strong style={{ color: 'hsl(var(--foreground))' }}>{current?.label}</strong></div></div><div className="topbar-actions"><button className="btn icon-btn notification-button" onClick={() => setLocation(`${roles[role].base}/notifications`)} aria-label="Open notifications" data-testid="button-header-notifications"><Bell size={17} /></button><div style={{ position: 'relative' }}><button className="btn" style={{ padding: '4px 9px 4px 5px', gap: 8 }} onClick={() => setMenu(!menu)} data-testid="button-user-menu"><span className="brand-mark" style={{ width: 29, height: 29, borderRadius: 10, fontSize: 10, fontWeight: 700 }}>{initials(session.name)}</span><span style={{ textAlign: 'left', display: 'block' }}><strong style={{ display: 'block', fontSize: 11 }}>{session.name}</strong><small className="muted" style={{ fontSize: 9 }}>{roles[role].short}</small></span><ChevronDown size={14} /></button>{menu && <div className="surface" style={{ position: 'absolute', right: 0, top: 48, width: 230, padding: 10, zIndex: 40 }}><p className="eyebrow" style={{ padding: '4px 8px 8px' }}>Signed in workspace</p><div style={{ padding: '2px 8px 10px', fontSize: 12 }}><strong>{roles[role].label}</strong><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 3 }}>Role is assigned to your account.</span></div><button className="btn btn-ghost btn-danger" style={{ width: '100%', justifyContent: 'flex-start', marginTop: 4 }} onClick={onLogout} data-testid="button-menu-logout"><LogOut size={14} /> Sign out</button></div>}</div></div></header><PageContent role={role} path={path} notify={notify} /></main>{toast && <div className="toast-note" data-testid="status-toast"><CheckCircle size={15} style={{ verticalAlign: 'middle', marginRight: 7 }} />{toast}</div>}</div>;
 }
 function PageContent({ role, path, notify }) {
     if (path.endsWith('/dashboard'))
@@ -158,12 +168,16 @@ function PageContent({ role, path, notify }) {
         return <SettingsPage notify={notify} />;
     if (path === '/reviewer/reviews')
         return <ReviewQueue notify={notify} />;
-    if (path === '/reviewer/screener')
-        return <Screener notify={notify} />;
+    if (path === '/reviewer/analyzer') {
+        const submissionId = new URLSearchParams(window.location.search).get('submission_id');
+        return submissionId ? <Analyzer notify={notify} submissionId={submissionId} /> : <ReviewerAnalyzerPicker />;
+    }
     if (path === '/reviewer/policies')
         return <PolicyManagement notify={notify} audience="reviewer" />;
     if (path === '/reviewer/history' || path === '/reviewer/approved')
         return <ReviewSupportingPage path={path} />;
+    if (path === '/reviewer/changes')
+        return <DesignerChanges notify={notify} reviewer />;
     if (path === '/designer/curricula')
         return <DesignerCurricula notify={notify} />;
     if (path === '/designer/create')
@@ -175,7 +189,9 @@ function PageContent({ role, path, notify }) {
     if (path === '/designer/comparison')
         return <ComparisonPage />;
     if (path.startsWith('/designer/analyzer'))
-        return <Analyzer notify={notify} />;
+        return <Unauthorized />;
+    if (path === '/reviewer/screener')
+        return <Unauthorized />;
     if (path === '/designer/changes')
         return <DesignerChanges notify={notify} />;
     if (path === '/designer/improvements')
@@ -184,6 +200,8 @@ function PageContent({ role, path, notify }) {
         return <PublishedPage />;
     if (path === '/institute/curricula')
         return <InstituteCurricula />;
+    if (path === '/institute/submit')
+        return <InstituteSubmissionPortal notify={notify} />;
     if (path === '/institute/courses')
         return <InstituteCourses />;
     if (path === '/institute/coordinators')
@@ -209,13 +227,72 @@ function StatusBadge({ status }) {
 }
 function MiniBar({ value }) { return <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div className="progress" style={{ flex: 1 }}><span style={{ width: `${value}%` }} /></div><strong style={{ fontSize: 11, minWidth: 30 }}>{value}%</strong></div>; }
 function Dashboard({ role, notify }) {
+    const [stats, setStats] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const load = async () => {
+        setLoading(true); setError('');
+        try {
+            let next = [];
+            if (role === 'admin') {
+                const [documents, institutions, users, submissions] = await Promise.all([
+                    mockService.getDocuments(), mockService.getInstitutions(), mockService.getAdminUsers(), mockService.getAdminSubmissions(),
+                ]);
+                next = [
+                    ['AICTE Documents', documents.length, 'Stored reference PDFs', FileText],
+                    ['Institutions', institutions.length, 'Registered institutions', Building2],
+                    ['User Accounts', users.length, 'Assigned workspace identities', Users],
+                    ['Pending Reviews', submissions.filter(row => row.status === 'Pending').length, 'In the shared Reviewer Queue', ClipboardCheck],
+                ];
+            } else if (role === 'reviewer') {
+                const [queue, history] = await Promise.all([mockService.getPendingSubmissions(), mockService.getReviewHistory()]);
+                next = [
+                    ['Pending Reviews', queue.length, 'Awaiting Reviewer action', Inbox],
+                    ['Accepted', history.filter(row => row.status === 'Accepted').length, 'Recorded decisions', CheckCircle2],
+                    ['Revision Required', history.filter(row => row.status === 'Revision Required').length, 'Returned for correction', RefreshCw],
+                    ['Rejected', history.filter(row => row.status === 'Rejected').length, 'Preserved decision records', CircleAlert],
+                ];
+            } else if (role === 'designer') {
+                const [documents, submissions, improvements, requests] = await Promise.all([
+                    mockService.getDocuments(), mockService.getMySubmissions(), mockService.getImprovementHistory(), mockService.getChangeRequests(),
+                ]);
+                const activeFindings = improvements.reduce((sum, row) => sum + (row.latest_findings?.length || 0), 0);
+                next = [
+                    ['Uploaded Curricula', documents.length, 'Your indexed Designer PDFs', FolderKanban],
+                    ['Pending Review', submissions.filter(row => row.status === 'Pending').length, 'Officially submitted versions', ClipboardCheck],
+                    ['Outstanding Findings', activeFindings, 'From saved Analyzer reports', Lightbulb],
+                    ['Open Change Requests', requests.filter(row => ['Pending Designer Action', 'In Progress', 'Reopened'].includes(row.status)).length, 'Reviewer feedback to address', RefreshCw],
+                ];
+            } else {
+                const [prepared, submissions] = await Promise.all([mockService.getWorkflowCurricula(), mockService.getMySubmissions()]);
+                next = [
+                    ['Ready to Submit', prepared.length, 'Designer PDFs linked to this institution', Upload],
+                    ['Submitted Versions', submissions.length, 'Stored submission history', BookOpen],
+                    ['Pending Review', submissions.filter(row => row.status === 'Pending').length, 'In the shared Reviewer Queue', ClipboardCheck],
+                    ['Revision Required', submissions.filter(row => row.status === 'Revision Required').length, 'Reviewer feedback available', RefreshCw],
+                ];
+            }
+            setStats(next);
+        } catch (e) { setError(e.message || 'Unable to load workspace summary.'); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { void load(); }, [role]);
     const config = {
-        admin: { title: 'Governance overview', detail: 'A live view of documents, institutions, curriculum movement and review health.', stats: [['Approved Institutes', '4,850', '+86 this quarter', Building2], ['AICTE Documents', '320', '12 awaiting metadata', FileText], ['Active Policies', '85', '3 revised this month', ShieldCheck], ['Pending Reviews', '24', '8 high priority', ClipboardCheck]] },
-        reviewer: { title: 'Review desk', detail: 'Your queue of curriculum decisions, evidence and upcoming panel work.', stats: [['Pending Reviews', '12', '3 due this week', Inbox], ['Approved', '45', '91% first-pass clarity', CheckCircle2], ['Rejected', '5', 'Across 54 decisions', CircleAlert], ['Changes Requested', '8', '4 awaiting response', RefreshCw]] },
-        designer: { title: 'Design studio', detail: 'Curriculum work in motion, with evidence-backed recommendations in view.', stats: [['Draft Curricula', '3', '1 edited today', FolderKanban], ['Under Review', '2', 'B.Tech AI is active', ClipboardCheck], ['Priority Improvements', '3', 'Analyzer findings', Lightbulb], ['Published', '4', 'Across 2 programs', CheckCircle2]] },
-        institute: { title: 'Institute workspace', detail: 'Published curriculum access and the people responsible for delivery.', stats: [['Published Curricula', '12', '4 recently updated', BookOpen], ['Assigned Courses', '8', 'Across 3 programs', ListChecks], ['Active Coordinators', '8', 'One per course version', UserCog], ['Pending Changes', '3', '2 high priority', RefreshCw]] },
+        admin: { title: 'Governance overview', detail: 'Current records across documents, institutions, accounts, and submissions.' },
+        reviewer: { title: 'Review desk', detail: 'Your shared queue of submitted curriculum versions and completed decisions.' },
+        designer: { title: 'Design studio', detail: 'Your submitted curricula, analysis findings, and reviewer requests.' },
+        institute: { title: 'Institute workspace', detail: 'Curricula and review activity linked to your institution.' },
     }[role];
-    return <div className="content"><PageHeader eyebrow={roles[role].label} title={config.title} detail={config.detail} action={<button className="btn" onClick={() => notify('Workspace data refreshed from local demo state.')} data-testid="button-refresh-dashboard"><RefreshCw size={14} /> Refresh state</button>} /><div className="stat-grid">{config.stats.map(([label, value, note, Icon]) => <StatCard key={label} label={label} value={value} note={note} icon={Icon} />)}</div><DashboardActions role={role} /><div style={{ display: 'grid', gridTemplateColumns: '1.25fr .75fr', gap: 16, marginTop: 17 }}><SectionCard title={role === 'reviewer' ? 'Review queue' : role === 'designer' ? 'Curriculum movement' : role === 'institute' ? 'Recently published' : 'Recent governance activity'} action={<button className="btn btn-ghost" onClick={() => notify('Opening the full activity register.')} data-testid="button-view-activity">View all <ArrowRight size={14} /></button>}><ActivityList role={role} /></SectionCard><SectionCard title={role === 'admin' ? 'Review health' : role === 'reviewer' ? 'Upcoming reviews' : role === 'designer' ? 'AI recommendations' : 'Delivery pulse'}><div style={{ display: 'grid', gap: 16 }}>{(role === 'designer' ? [['High priority improvements', 3], ['Medium priority improvements', 5], ['Missing topic areas', 2]] : role === 'reviewer' ? [['Ready for decision', 7], ['Evidence requested', 3], ['Panel this week', 2]] : role === 'institute' ? [['Courses with active owners', 100], ['Feedback this quarter', 68], ['Published visibility', 100]] : [['Screening pass rate', 91], ['Reviews within SLA', 78], ['Policy coverage', 96]]).map(([label, value]) => <div key={label}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 7 }}><span>{label}</span><strong>{value}{role === 'admin' || role === 'institute' ? '%' : ''}</strong></div><MiniBar value={Number(value) > 10 ? Number(value) : Number(value) * 20} /></div>)}</div></SectionCard></div><div style={{ marginTop: 16 }}><SectionCard title="Curriculum register"><CurriculumTable items={mockCurricula.slice(0, role === 'admin' ? 4 : 3)} onAction={() => notify('Curriculum detail opened in the governed workspace.')} /></SectionCard></div></div>;
+    return <div className="content"><PageHeader eyebrow={roles[role].label} title={config.title} detail={config.detail} action={<button className="btn" onClick={() => void load()} disabled={loading} data-testid="button-refresh-dashboard"><RefreshCw size={14} /> Refresh</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        <div className="stat-grid">{(loading && !stats.length ? [['Loading workspace', '?', 'Fetching current records', RefreshCw]] : stats).map(([label, value, note, Icon]) => <StatCard key={label} label={label} value={value} note={note} icon={Icon} />)}</div>
+        <DashboardActions role={role} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1.25fr .75fr', gap: 16, marginTop: 17 }}>
+            <SectionCard title={role === 'reviewer' ? 'Review queue' : role === 'designer' ? 'Curriculum movement' : role === 'institute' ? 'Recent submissions' : 'Recent governance activity'}><ActivityList role={role} /></SectionCard>
+            <SectionCard title="Workflow status"><p className="muted" style={{ fontSize: 12 }}>{loading ? 'Updating from current workflow records.' : error ? 'Refresh to retry loading current records.' : 'Counts above reflect records available to your account.'}</p></SectionCard>
+        </div>
+        <div style={{ marginTop: 16 }}><SectionCard title="Curriculum register">{role === 'reviewer' ? <ReviewerDashboardQueue /> : <RecentWorkflowRecords role={role} />}</SectionCard></div>
+    </div>;
 }
 function DashboardActions({ role }) {
     const [, setLocation] = useLocation();
@@ -226,265 +303,469 @@ function DashboardActions({ role }) {
         ],
         reviewer: [
             ['Manage Policies', 'Update, retire or remove the rules used during expert review.', ShieldCheck, '/reviewer/policies'],
-            ['Open Curriculum Screener', 'Inspect evidence, then approve, reject or request changes.', SlidersHorizontal, '/reviewer/screener'],
+            ['Open Review Queue', 'Review submitted curriculum versions and record decisions.', Inbox, '/reviewer/reviews'],
         ],
         designer: [
             ['Upload Curriculum PDF', 'Start the next governed curriculum version from a PDF.', Upload, '/designer/create'],
             ['Ask AI Assistant', 'Get evidence-backed help for outcomes, structure and coverage.', Bot, '/designer/assistant'],
-            ['Analyze Curriculum', 'Find problems and apply defined solutions before submission.', BarChart3, '/designer/analyzer'],
         ],
         institute: [
+            ['Portal Upload', 'Submit a prepared institutional curriculum for Reviewer Compliance.', Upload, '/institute/submit'],
             ['Published Curricula', 'See only the programmes explicitly released to this institute.', BookOpen, '/institute/curricula'],
             ['Course Coordinators', 'Assign one active coordinator to each course and version.', UserCog, '/institute/coordinators'],
-            ['Request Curriculum Change', 'Send evidence to the designer for next year’s version.', RefreshCw, '/institute/changes'],
+            ['Request Curriculum Change', 'Send evidence to the designer for next yearâ€™s version.', RefreshCw, '/institute/changes'],
         ],
     }[role];
     return <div className={`dashboard-actions dashboard-actions-${role}`}>{actions.map(([label, detail, Icon, href]) => <button className="surface dashboard-action" key={label} onClick={() => setLocation(href)} data-testid={`button-dashboard-${label.toLowerCase().replaceAll(' ', '-')}`}><span className="brand-mark"><Icon size={17} /></span><span><strong>{label}</strong><small>{detail}</small></span><ArrowRight size={15} className="action-arrow" /></button>)}</div>;
 }
 function ActivityList({ role }) {
-    const items = role === 'admin' ? [['Document uploaded', 'AICTE Model Curriculum Guidelines 2026', '14 min ago'], ['Policy updated', 'Credit distribution policy · v3.2', '1 hr ago'], ['Institute added', 'Northstar Institute of Technology', '3 hrs ago'], ['Curriculum submitted', 'B.Tech Artificial Intelligence · v2.1', 'Yesterday']] : role === 'reviewer' ? [['Ready for review', 'B.Tech Artificial Intelligence · v2.0', 'Today'], ['Decision recorded', 'B.Tech CSE · v1.4 approved', 'Yesterday'], ['Evidence requested', 'B.Tech ECE · v1.1', '2 days ago']] : role === 'designer' ? [['Under review', 'B.Tech Artificial Intelligence · v2.1', 'Today'], ['Changes requested', 'B.Tech ECE · v1.1', 'Yesterday'], ['Recommendation added', 'DBMS · outcome mapping', '2 days ago']] : [['Updated', 'B.Tech CSE · 2026–27', 'Today'], ['Coordinator assigned', 'Data Structures · v4.0', 'Yesterday'], ['Change request', 'DBMS · CR-1018', '3 days ago']];
-    return <div style={{ display: 'grid', gap: 6 }}>{items.map(([action, entity, time], index) => <div key={entity} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: index === items.length - 1 ? 0 : '1px solid hsl(var(--border))' }}><span className="brand-mark" style={{ width: 31, height: 31, borderRadius: 10, flexShrink: 0 }}><Activity size={14} /></span><div style={{ flex: 1 }}><strong style={{ display: 'block', fontSize: 12 }}>{action}</strong><span className="muted" style={{ fontSize: 11 }}>{entity}</span></div><span className="muted" style={{ fontSize: 10 }}>{time}</span></div>)}</div>;
+    const [items, setItems] = useState([]);
+    const [error, setError] = useState('');
+    useEffect(() => {
+        const load = role === 'reviewer' ? mockService.getPendingSubmissions()
+            : role === 'admin' ? mockService.getAdminSubmissions()
+                : mockService.getMySubmissions();
+        load.then(rows => {
+            const recent = rows.slice(0, 4).map(row => ({
+                title: row.review_history?.length ? `Reviewer decision: ${row.review_history[row.review_history.length - 1].status}` : row.status === 'Pending' ? 'Pending compliance review' : 'Curriculum submission',
+                curriculum: `${row.curriculum_name} · v${row.version}`,
+                date: formatDocumentDate(row.review_history?.at(-1)?.decided_at || row.submitted_at),
+            }));
+            setItems(recent);
+        }).catch(e => setError(e.message || 'Unable to load recent workflow activity.'));
+    }, [role]);
+    if (error) return <p className="muted" role="alert">{error}</p>;
+    if (!items.length) return <p className="muted" style={{ fontSize: 12 }}>No recent workflow activity.</p>;
+    return <div style={{ display: 'grid', gap: 6 }}>{items.map((item, index) => <div key={`${item.curriculum}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: index === items.length - 1 ? 0 : '1px solid hsl(var(--border))' }}><span className="brand-mark" style={{ width: 31, height: 31, borderRadius: 10, flexShrink: 0 }}><Activity size={14} /></span><div style={{ flex: 1 }}><strong style={{ display: 'block', fontSize: 12 }}>{item.title}</strong><span className="muted" style={{ fontSize: 11 }}>{item.curriculum}</span></div><span className="muted" style={{ fontSize: 10 }}>{item.date}</span></div>)}</div>;
 }
-function CurriculumTable({ items, onAction }) {
+function RecentWorkflowRecords({ role }) {
+    const [rows, setRows] = useState([]);
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(true);
+    useEffect(() => {
+        const load = role === 'admin' ? mockService.getAdminSubmissions() : mockService.getMySubmissions();
+        load.then(setRows).catch(e => setError(e.message || 'Unable to load curriculum submissions.')).finally(() => setLoading(false));
+    }, [role]);
+    if (loading) return <p className="muted">Loading submissions…</p>;
+    if (error) return <p className="muted" role="alert">{error}</p>;
+    if (!rows.length) return <p className="muted" style={{ fontSize: 12 }}>No submission records are available yet.</p>;
+    return <div className="table-scroll"><table className="data-table"><thead><tr><th>Curriculum</th>{role === 'admin' && <th>Institute</th>}<th>Version</th><th>Submitted</th><th>Status</th></tr></thead><tbody>{rows.slice(0, 5).map(row => <tr key={row.submission_id}><td><strong>{row.curriculum_name}</strong></td>{role === 'admin' && <td>{row.institute_name}</td>}<td>v{row.version}</td><td>{formatDocumentDate(row.submitted_at)}</td><td><StatusBadge status={row.status} /></td></tr>)}</tbody></table></div>;
+}
+function ReviewerDashboardQueue() {
+    const [rows, setRows] = useState([]);
+    const [error, setError] = useState('');
+    useEffect(() => { mockService.getPendingSubmissions().then(setRows).catch(e => setError(e.message || 'Unable to load submissions.')); }, []);
+    if (error) return <p className="muted" role="alert">{error}</p>;
+    if (!rows.length) return <p className="muted" style={{ fontSize: 12 }}>No database submissions are pending review.</p>;
+    return <div className="table-scroll"><table className="data-table"><thead><tr><th>Curriculum</th><th>Institute</th><th>Version</th><th>Submitted</th><th>Status</th></tr></thead><tbody>{rows.slice(0, 5).map(row => <tr key={row.submission_id}><td><strong>{row.curriculum_name}</strong></td><td>{row.institute_name}</td><td>{row.version}</td><td>{formatDocumentDate(row.submitted_at)}</td><td><StatusBadge status={row.status} /></td></tr>)}</tbody></table></div>;
+}function CurriculumTable({ items, onAction }) {
     return <div className="table-scroll"><table className="data-table"><thead><tr><th>Curriculum</th><th>Institute</th><th>Version</th><th>Designer</th><th>Score</th><th>Status</th><th>Action</th></tr></thead><tbody>{items.map((item) => <tr key={item.id} data-testid={`row-curriculum-${item.id}`}><td><strong>{item.name}</strong><span className="muted" style={{ display: 'block', marginTop: 4 }}>{item.program}</span></td><td>Northstar Institute of Technology</td><td>{item.version}</td><td>{item.designer}</td><td><strong>{item.score}</strong><span className="muted">/100</span></td><td><StatusBadge status={item.status} /></td><td><button className="btn icon-btn" onClick={() => onAction(item)} data-testid={`button-view-curriculum-${item.id}`}><Eye size={15} /></button></td></tr>)}</tbody></table></div>;
 }
 function formatDocumentDate(value) {
     if (!value)
         return 'Not recorded';
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
+    if (Number.isNaN(date.getTime())) return 'Not recorded';
+    let timeZone;
+    try { timeZone = localStorage.getItem('aicte-timezone') || undefined; } catch { timeZone = undefined; }
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit', ...(timeZone ? { timeZone } : {}) });
 }
 function AdminDocuments({ notify }) {
-    const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [docs, setDocs] = useState([]);
+    const [selected, setSelected] = useState(null);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
-    const filtered = docs.filter((doc) => doc.filename.toLowerCase().includes(query.toLowerCase()));
+    const [error, setError] = useState('');
+    const filtered = docs.filter(doc => (doc.filename || '').toLowerCase().includes(query.toLowerCase()));
     const refreshDocuments = async () => {
-        setLoading(true);
-        try {
-            setDocs(await mockService.getDocuments());
-        }
-        catch (error) {
-            notify(error.message);
-        }
-        finally {
-            setLoading(false);
-        }
+        setLoading(true); setError('');
+        try { setDocs(await mockService.getDocuments()); }
+        catch (e) { setError(e.message || 'Unable to load indexed documents.'); }
+        finally { setLoading(false); }
     };
-    const uploadPdf = async (file) => {
-        if (!file)
-            return;
-        setUploading(true);
+    const uploadPdf = async file => {
+        if (!file) return;
+        setUploading(true); setError('');
         try {
             const result = await mockService.uploadDocument(file);
             notify(`${result.filename} indexed into ${result.total_chunks} chunks.`);
             await refreshDocuments();
-        }
-        catch (error) {
-            notify(error.message);
-        }
-        finally {
-            setUploading(false);
-        }
+        } catch (e) { setError(e.message || 'Unable to index this PDF.'); }
+        finally { setUploading(false); }
     };
-    const removeDocument = async (filename) => {
+    const removeDocument = async doc => {
+        setError('');
         try {
-            await mockService.deleteDocument(filename);
-            setDocs(docs.filter((doc) => doc.filename !== filename));
-            notify(`${filename} removed from the vector index.`);
-        }
-        catch (error) {
-            notify(error.message);
-        }
+            await mockService.deleteDocument(doc.filename, doc.document_id || '');
+            await refreshDocuments();
+            notify(`${doc.filename} was removed from the index.`);
+        } catch (e) { setError(e.message || 'Unable to remove this indexed document.'); }
     };
-    useEffect(() => {
-        refreshDocuments();
-    }, []);
-    return <div className="content"><PageHeader eyebrow="Admin / Knowledge registry" title="Upload authoritative document" detail="Add AICTE source PDFs. They are chunked with a recursive character splitter, embedded with Hugging Face, and stored in MongoDB Atlas Vector Search." action={<div style={{ display: 'flex', gap: 8 }}><label className={`btn btn-primary upload-button ${uploading ? 'disabled' : ''}`}><Upload size={15} /> {uploading ? 'Indexing PDF' : 'Upload PDF'}<input type="file" accept=".pdf,application/pdf" disabled={uploading} onChange={(e) => { uploadPdf(e.target.files?.[0]); e.target.value = ''; }} data-testid="input-admin-document-pdf" /></label><button className="btn" onClick={() => setOpen(true)} data-testid="button-add-document"><Plus size={15} /> Add metadata</button></div>} /><div className="surface" style={{ padding: 13, marginBottom: 15, display: 'flex', gap: 10 }}><div style={{ position: 'relative', flex: 1 }}><Search size={15} className="muted" style={{ position: 'absolute', top: 12, left: 12 }} /><input className="field" style={{ paddingLeft: 36 }} placeholder="Search indexed PDFs" value={query} onChange={(e) => setQuery(e.target.value)} data-testid="input-search-documents" /></div><button className="btn" onClick={refreshDocuments} data-testid="button-filter-documents"><RefreshCw size={14} /> Refresh</button></div><SectionCard title={loading ? 'Loading indexed documents' : `${filtered.length} documents in vector registry`}><div className="table-scroll"><table className="data-table"><thead><tr><th>Title</th><th>Storage</th><th>Chunks</th><th>Uploaded</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map((doc, i) => <tr key={doc.filename}><td><strong>{doc.filename}</strong><span className="muted" style={{ display: 'block', marginTop: 4 }}>MongoDB Atlas Vector Search</span></td><td>PDF embeddings</td><td>{doc.total_chunks}</td><td>{formatDocumentDate(doc.uploaded_at)}</td><td><StatusBadge status={doc.status || 'Active'} /></td><td><button className="btn icon-btn" onClick={() => notify(`${doc.filename} has ${doc.total_chunks} searchable chunks.`)} data-testid={`button-view-document-${i}`}><Eye size={14} /></button><button className="btn icon-btn" onClick={() => removeDocument(doc.filename)} data-testid={`button-archive-document-${i}`}><ArchiveIcon /></button></td></tr>)}{!loading && filtered.length === 0 && <tr><td colSpan="6"><span className="muted">No indexed PDFs found. Upload an authoritative PDF to power the assistant.</span></td></tr>}</tbody></table></div></SectionCard>{open && <Modal title="Add authoritative document" onClose={() => setOpen(false)}><label className="label">Document title</label><input className="field" defaultValue="AICTE Model Curriculum Guidelines 2026" data-testid="input-document-title" /><label className="label" style={{ marginTop: 13 }}>Document type</label><select className="select" data-testid="select-document-type"><option>Model Curriculum</option><option>Guidelines</option><option>Circular</option><option>Policy</option></select><label className="label" style={{ marginTop: 13 }}>PDF file</label><label className="btn upload-button" style={{ width: '100%' }}><Upload size={14} /> Choose PDF<input type="file" accept=".pdf,application/pdf" onChange={(e) => uploadPdf(e.target.files?.[0])} data-testid="input-document-modal-pdf" /></label><label className="label" style={{ marginTop: 13 }}>Description</label><textarea className="textarea" defaultValue="Authoritative reference for 2026 curriculum design and review." data-testid="textarea-document-description" /><button className="btn btn-primary" style={{ width: '100%', marginTop: 18 }} onClick={() => { setOpen(false); notify('Metadata saved. Upload the PDF selector indexes content automatically.'); }} data-testid="button-save-document"><Upload size={15} /> Save metadata</button></Modal>}</div>;
+    useEffect(() => { void refreshDocuments(); }, []);
+    return <div className="content"><PageHeader eyebrow="Admin / Knowledge registry" title="Upload authoritative document" detail="Upload AICTE reference PDFs to index their contents for search and analysis." action={<label className={`btn btn-primary upload-button ${uploading ? 'disabled' : ''}`}><Upload size={15} /> {uploading ? 'Indexing PDF' : 'Upload PDF'}<input type="file" accept=".pdf,application/pdf" disabled={uploading} onChange={event => { void uploadPdf(event.target.files?.[0]); event.target.value = ''; }} data-testid="input-admin-document-pdf" /></label>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        <div className="surface" style={{ padding: 13, marginBottom: 15, display: 'flex', gap: 10 }}><input className="field" aria-label="Search indexed PDFs" placeholder="Search indexed PDFs" value={query} onChange={event => setQuery(event.target.value)} /><button className="btn" onClick={() => void refreshDocuments()} disabled={loading}><RefreshCw size={14} /> Refresh</button></div>
+        <SectionCard title={loading ? 'Loading indexed documents' : `${filtered.length} indexed documents`}><div className="table-scroll"><table className="data-table"><thead><tr><th>Title</th><th>Chunks</th><th>Uploaded</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map((doc, index) => <tr key={doc.document_id || doc.filename}><td><strong>{doc.filename}</strong><span className="muted" style={{ display: 'block', marginTop: 4 }}>{doc.source_type || 'AICTE reference'}</span></td><td>{doc.total_chunks}</td><td>{formatDocumentDate(doc.uploaded_at)}</td><td><StatusBadge status={doc.status || 'Active'} /></td><td><button className="btn icon-btn" aria-label={`Details for ${doc.filename}`} onClick={() => setSelected(doc)} data-testid={`button-view-document-${index}`}><Eye size={14} /></button><button className="btn icon-btn" aria-label={`Delete ${doc.filename}`} onClick={() => void removeDocument(doc)} data-testid={`button-delete-document-${index}`}><Trash2 size={14} /></button></td></tr>)}{!loading && filtered.length === 0 && <tr><td colSpan="5" className="muted">No indexed PDFs found. Upload a reference PDF to make it searchable.</td></tr>}</tbody></table></div></SectionCard>
+        {selected && <Modal title="Indexed document details" onClose={() => setSelected(null)}><dl style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px 14px', fontSize: 12 }}><dt className="muted">File</dt><dd>{selected.filename}</dd><dt className="muted">Document ID</dt><dd>{selected.document_id || 'Not recorded'}</dd><dt className="muted">Curriculum ID</dt><dd>{selected.curriculum_id || 'Not applicable'}</dd><dt className="muted">Programme</dt><dd>{selected.programme || 'Not recorded'}</dd><dt className="muted">Branch</dt><dd>{selected.branch || 'Not recorded'}</dd><dt className="muted">Version</dt><dd>{selected.version || 'Not recorded'}</dd><dt className="muted">Indexed chunks</dt><dd>{selected.total_chunks}</dd><dt className="muted">Uploaded</dt><dd>{formatDocumentDate(selected.uploaded_at)}</dd></dl></Modal>}
+    </div>;
 }
-function ArchiveIcon() { return <Trash2 size={14} />; }
-function PolicyManagement({ notify, audience }) {
-    const [open, setOpen] = useState(false);
-    const [policies, setPolicies] = useState([
-        ['Credit Distribution & Workload', 'Academic structure', 'v3.2', 'Active', 'All B.Tech programmes', 'Northstar Institute of Technology'],
-        ['Outcome Based Education Standard', 'Learning outcomes', 'v2.4', 'Active', 'Technical programmes', 'Crescent Valley University'],
-        ['Practical & Industry Exposure', 'Assessment', 'v1.8', 'Active', 'AI, CSE, ECE', 'Eastern Technical College'],
-        ['Model Curriculum Retirement', 'Governance', 'v1.0', 'Draft', '2026 cohort', 'Harbor School of Engineering'],
-    ]);
-    const prefix = audience === 'admin' ? 'Admin' : 'Reviewer / Expert';
-    const mutatePolicy = (index, action) => {
-        if (action === 'deleted')
-            setPolicies(policies.filter((_, itemIndex) => itemIndex !== index));
-        notify(action === 'deleted' ? 'Policy removed from the governed register.' : `Policy ${policies[index][0]} updated.`);
+function PolicyManagement({ audience }) {
+    const [criteria, setCriteria] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const load = async () => {
+        setLoading(true); setError('');
+        try { setCriteria(await mockService.getAnalyzerCriteria()); }
+        catch (e) { setError(e.message || 'Unable to load configured Analyzer criteria.'); }
+        finally { setLoading(false); }
     };
-    return <div className="content"><PageHeader eyebrow={`${prefix} / Governance rules`} title="Policy management" detail="Update, retire or remove the rules used to make defensible curriculum decisions." action={<button className="btn btn-primary" onClick={() => setOpen(true)} data-testid={`button-${audience}-add-policy`}><Plus size={15} /> Create policy</button>} /><div className="policy-note surface"><ShieldCheck size={18} /><span><strong>Policy authority</strong><small>{audience === 'reviewer' ? 'Reviewer / Expert edits are recorded for the active review cycle.' : 'AICTE policies are the authoritative source for screening and curriculum design.'}</small></span></div><div style={{ display: 'grid', gap: 12, marginTop: 14 }}>{policies.map((policy, index) => <div className="surface policy-row" key={policy[0]} data-testid={`card-${audience}-policy-${index}`}><div><span className="eyebrow">{policy[1]}</span><h3 className="font-display" style={{ fontSize: 15, margin: '6px 0' }}>{policy[0]}</h3><span className="muted" style={{ display: 'block', fontSize: 11 }}>{policy[4]}</span><span className="muted" style={{ display: 'block', marginTop: 4, fontSize: 10 }}>Institute: {policy[5]}</span></div><div><span className="muted" style={{ fontSize: 10 }}>Current version</span><strong style={{ display: 'block', marginTop: 4 }}>{policy[2]}</strong></div><StatusBadge status={policy[3]} /><div className="policy-actions"><button className="btn icon-btn" onClick={() => mutatePolicy(index, 'updated')} aria-label={`Update ${policy[0]}`} data-testid={`button-update-${audience}-policy-${index}`}><Pencil size={14} /></button><button className="btn icon-btn btn-danger" onClick={() => mutatePolicy(index, 'deleted')} aria-label={`Delete ${policy[0]}`} data-testid={`button-delete-${audience}-policy-${index}`}><Trash2 size={14} /></button></div></div>)}</div>{open && <Modal title="Create policy" onClose={() => setOpen(false)}><label className="label">Policy title</label><input className="field" required data-testid={`input-${audience}-policy-title`} /><label className="label" style={{ marginTop: 13 }}>Category</label><select className="select"><option>Academic structure</option><option>Learning outcomes</option><option>Assessment</option></select><label className="label" style={{ marginTop: 13 }}>Requirements and rules</label><textarea className="textarea" data-testid={`textarea-${audience}-policy-rules`} /><button className="btn btn-primary" style={{ width: '100%', marginTop: 18 }} onClick={() => { setOpen(false); notify('New policy saved as Draft for review.'); }} data-testid={`button-save-${audience}-policy`}><Save size={15} /> Save policy</button></Modal>}</div>;
+    useEffect(() => { void load(); }, []);
+    const groups = [...new Set(criteria.map(item => item.criterion))].map(key => ({
+        key, label: criteria.find(item => item.criterion === key)?.criterion_label || key,
+        rows: criteria.filter(item => item.criterion === key),
+    }));
+    const prefix = audience === 'admin' ? 'Admin' : 'Reviewer / Expert';
+    return <div className="content"><PageHeader eyebrow={`${prefix} / Governance rules`} title="Analyzer criteria" detail="The configured criteria used by curriculum scoring, with each rule?s stated basis and availability." action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        {loading ? <div className="surface" style={{ padding: 22 }}>Loading configured criteria?</div> : !criteria.length ? <div className="surface" style={{ padding: 22 }}><p className="muted" style={{ margin: 0 }}>No Analyzer criteria are configured.</p></div> : <div style={{ display: 'grid', gap: 12 }}>{groups.map(group => <SectionCard key={group.key} title={group.label}><div style={{ display: 'grid', gap: 8 }}>{group.rows.map(row => <article key={row.check_id} className="surface" style={{ padding: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 9 }}><strong style={{ fontSize: 12 }}>{row.title}</strong><span className="badge badge-slate">{row.basis === 'AICTE_MODEL_REFERENCE' ? 'AICTE model reference' : 'Analyzer-derived'}</span></div><p className="muted" style={{ fontSize: 11, margin: '7px 0' }}>{row.explanation}</p><div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}><span className="muted" style={{ fontSize: 10 }}>Configured comparison: {typeof row.expected === 'object' ? JSON.stringify(row.expected) : row.expected}</span><span className="muted" style={{ fontSize: 10 }}>Availability: {row.availability_policy}</span></div></article>)}</div></SectionCard>)}</div>}
+    </div>;
 }
 function AdminInstitutes({ notify }) {
-    const [open, setOpen] = useState(false);
-    const [institutes, setInstitutes] = useState([['Northstar Institute of Technology', 'INST-0421', 'Pune, Maharashtra', '8 programmes', 'Approved'], ['Crescent Valley University', 'INST-0317', 'Bengaluru, Karnataka', '12 programmes', 'Approved'], ['Eastern Technical College', 'INST-0188', 'Bhubaneswar, Odisha', '6 programmes', 'Approved'], ['Harbor School of Engineering', 'INST-0592', 'Kochi, Kerala', '4 programmes', 'Pending']]);
-    return <div className="content"><PageHeader eyebrow="Admin / National network" title="Approved institutes" detail="Visibility boundaries for published curriculum and institutional delivery." action={<button className="btn btn-primary" onClick={() => setOpen(true)} data-testid="button-add-institute"><Plus size={15} /> Add institute</button>} /><SectionCard title={`${institutes.length} institutes`} action={<button className="btn"><Filter size={14} /> Filter</button>}><div className="table-scroll"><table className="data-table"><thead><tr><th>Institute</th><th>Institute ID</th><th>Location</th><th>Programs</th><th>Status</th><th>Action</th></tr></thead><tbody>{institutes.map((item, index) => <tr key={item[1]}><td><strong>{item[0]}</strong><span className="muted" style={{ display: 'block', marginTop: 4 }}>Representative: {index === 0 ? 'Rohan Kulkarni' : index === 1 ? 'Priya Shah' : 'Institute representative assigned'}</span><span className="muted" style={{ display: 'block', marginTop: 3 }}>Curriculum designer: {index === 0 ? 'Ananya Iyer' : 'Design cell assigned'}</span></td><td>{item[1]}</td><td>{item[2]}</td><td>{item[3]}</td><td><StatusBadge status={item[4]} /></td><td><button className="btn icon-btn" onClick={() => notify(`${item[0]} detail opened with representative and curriculum designer.`)} data-testid={`button-view-institute-${index}`}><Eye size={14} /></button></td></tr>)}</tbody></table></div></SectionCard>{open && <Modal title="Add approved institute" onClose={() => setOpen(false)}><label className="label">Institute name</label><input className="field" data-testid="input-institute-name" /><label className="label" style={{ marginTop: 13 }}>Institute ID</label><input className="field" placeholder="INST-0000" data-testid="input-institute-id" /><label className="label" style={{ marginTop: 13 }}>Location</label><input className="field" data-testid="input-institute-location" /><button className="btn btn-primary" style={{ width: '100%', marginTop: 18 }} onClick={() => { setOpen(false); notify('Institute added to the approved network.'); }} data-testid="button-save-institute"><Save size={15} /> Add institute</button></Modal>}</div>;
+    const [institutes, setInstitutes] = useState([]);
+    const [name, setName] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const load = async () => { setLoading(true); try { setInstitutes(await mockService.getInstitutions()); setError(''); } catch (e) { setError(e.message || 'Unable to load institutions.'); } finally { setLoading(false); } };
+    useEffect(() => { void load(); }, []);
+    const add = async event => { event.preventDefault(); try { await mockService.createInstitution(name); setName(''); await load(); notify('Institution created. Assign Designer and Institute Representative accounts in Users & Roles.'); } catch (e) { setError(e.message || 'Unable to create institution.'); } };
+    return <div className="content"><PageHeader eyebrow="Admin / Institution registry" title="Institutions" detail="Create trusted institutional records, then explicitly link Designer and Institute Representative accounts in Users & Roles." /><SectionCard title="Create institution"><form onSubmit={add} style={{ display: 'flex', gap: 9, maxWidth: 650 }}><input className="field" required value={name} onChange={e => setName(e.target.value)} placeholder="Official institution name" data-testid="input-institute-name" /><button className="btn btn-primary" data-testid="button-save-institute"><Plus size={14} /> Add institution</button></form></SectionCard>{error && <div className="surface" role="alert" style={{ padding: 12, marginTop: 12 }}>{error} <button className="btn" onClick={() => void load()}>Retry</button></div>}<div style={{ marginTop: 14 }}><SectionCard title={loading ? 'Loading institutions' : `${institutes.length} database institutions`}><div className="table-scroll"><table className="data-table"><thead><tr><th>Institution</th><th>Institution ID</th><th>Status</th></tr></thead><tbody>{institutes.map(item => <tr key={item.institute_id}><td><strong>{item.name}</strong></td><td>{item.institute_id}</td><td><StatusBadge status={item.status} /></td></tr>)}{!loading && institutes.length === 0 && <tr><td colSpan="3" className="muted">No institutions yet. Add an institution, then assign accounts in Users & Roles.</td></tr>}</tbody></table></div></SectionCard></div></div>;
 }
 function AdminCurricula({ notify }) {
-    const tabs = ['All', 'Draft', 'Submitted', 'Screening', 'Under Review', 'Approved', 'Rejected', 'Changes Requested', 'Published', 'Archived'];
+    const tabs = ['All', 'Pending', 'Accepted', 'Revision Required', 'Rejected'];
     const [tab, setTab] = useState('All');
-    const shown = tab === 'All' ? mockCurricula : mockCurricula.filter((item) => item.status === tab);
-    return <div className="content"><PageHeader eyebrow="Admin / Curriculum lifecycle" title="Curriculum register" detail="Every version, handoff and human decision in one governed trail." /><div className="surface" style={{ padding: 8, display: 'flex', gap: 5, overflowX: 'auto', marginBottom: 15 }}>{tabs.map((item) => <button key={item} className={`btn ${tab === item ? 'btn-primary' : 'btn-ghost'}`} style={{ whiteSpace: 'nowrap', padding: '0 11px' }} onClick={() => setTab(item)} data-testid={`tab-curriculum-${item.toLowerCase().replaceAll(' ', '-')}`}>{item}</button>)}</div><SectionCard title={`${shown.length} curriculum records`}><CurriculumTable items={shown} onAction={(item) => notify(`${item.name} v${item.version} is ${item.status}.`)} /></SectionCard></div>;
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const load = async () => { setLoading(true); setError(''); try { setRows(await mockService.getAdminSubmissions()); } catch (e) { setError(e.message || 'Unable to load curriculum records.'); } finally { setLoading(false); } };
+    useEffect(() => { void load(); }, []);
+    const shown = tab === 'All' ? rows : rows.filter(item => item.status === tab);
+    return <div className="content"><PageHeader eyebrow="Admin / Curriculum lifecycle" title="Curriculum register" detail="Submitted versions and review status from the workflow record." action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} /><div className="surface" style={{ padding: 8, display: 'flex', gap: 5, overflowX: 'auto', marginBottom: 15 }}>{tabs.map((item) => <button key={item} className={`btn ${tab === item ? 'btn-primary' : 'btn-ghost'}`} style={{ whiteSpace: 'nowrap', padding: '0 11px' }} onClick={() => setTab(item)} data-testid={`tab-curriculum-${item.toLowerCase().replaceAll(' ', '-')}`}>{item}</button>)}</div>{error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}<SectionCard title={loading ? 'Loading submissions' : `${shown.length} curriculum submissions`}><div className="table-scroll"><table className="data-table"><thead><tr><th>Curriculum / ID</th><th>Institute</th><th>Version</th><th>Designer</th><th>Score</th><th>Status</th></tr></thead><tbody>{shown.map(item => <tr key={item.submission_id}><td><strong>{item.curriculum_name}</strong><span className="muted" style={{ display: 'block', marginTop: 3 }}>{item.curriculum_id}</span></td><td>{item.institute_name}</td><td>v{item.version}</td><td>{item.designer_name}</td><td>{item.latest_score == null ? 'Not analyzed' : `${item.latest_score}/100`}</td><td><StatusBadge status={item.status} /></td></tr>)}{!loading && !shown.length && <tr><td colSpan="6" className="muted">No submissions match this status.</td></tr>}</tbody></table></div></SectionCard></div>;
 }
 function AdminReviews({ notify }) {
-    return <div className="content"><PageHeader eyebrow="Admin / Oversight" title="Review operations" detail="Queue health and decision integrity across the national review panel." /><div className="stat-grid"><StatCard label="Open queue" value="24" note="12 reviewers active" icon={Inbox} /><StatCard label="Median decision time" value="4.6d" note="Down 0.8d this month" icon={Clock3} tone="peach" /><StatCard label="First-pass approval" value="68%" note="Across 2026 submissions" icon={CheckCircle2} tone="green" /><StatCard label="Escalations" value="2" note="Require admin attention" icon={CircleAlert} tone="amber" /></div><div style={{ marginTop: 17 }}><SectionCard title="Recent decisions"><table className="data-table"><thead><tr><th>Curriculum</th><th>Institute</th><th>Reviewer</th><th>Decision</th><th>Date</th><th>Notes</th></tr></thead><tbody>{[['B.Tech CSE', 'Northstar Institute of Technology', 'Dr. Arvind Rao', 'Approved', '04 Mar 2026', 'Strong outcomes mapping'], ['B.Tech ECE', 'Crescent Valley University', 'Dr. S. Kulkarni', 'Changes Requested', '02 Mar 2026', 'Assessment balance'], ['B.Tech AI', 'Eastern Technical College', 'Dr. Arvind Rao', 'Under Review', 'Today', 'Evidence review in progress']].map((row, i) => <tr key={row[0]}><td><strong>{row[0]}</strong></td><td>{row[1]}</td><td>{row[2]}</td><td><StatusBadge status={row[3]} /></td><td>{row[4]}</td><td><button className="btn btn-ghost" onClick={() => notify(`Decision notes: ${row[5]}.`)} data-testid={`button-review-note-${i}`}>View note <ChevronRight size={14} /></button></td></tr>)}</tbody></table></SectionCard></div></div>;
+    const [pending, setPending] = useState([]);
+    const [decisions, setDecisions] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const load = async () => { setLoading(true); setError(''); try { const [rows, history] = await Promise.all([mockService.getAdminSubmissions(), mockService.getReviewHistory()]); setPending(rows.filter(row => row.status === 'Pending')); setDecisions(history); } catch (e) { setError(e.message || 'Unable to load review operations.'); } finally { setLoading(false); } };
+    useEffect(() => { void load(); }, []);
+    const statuses = decisions.reduce((counts, row) => { for (const review of row.review_history || []) counts[review.status] = (counts[review.status] || 0) + 1; return counts; }, {});
+    const history = decisions.flatMap(row => (row.review_history || []).map((review, index) => ({ ...review, curriculum_name: row.curriculum_name, institute_name: row.institute_name, version: row.version, submission_id: row.submission_id, key: `${row.submission_id}-${review.review_id || index}` }))).sort((a, b) => new Date(b.decided_at || 0) - new Date(a.decided_at || 0));
+    return <div className="content"><PageHeader eyebrow="Admin / Oversight" title="Review operations" detail="Current queue and recorded Reviewer decisions." action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />{error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}<div className="stat-grid"><StatCard label="Open queue" value={loading ? '—' : pending.length} note="Pending submissions" icon={Inbox} /><StatCard label="Accepted" value={statuses.Accepted || 0} note="Recorded decisions" icon={CheckCircle2} tone="green" /><StatCard label="Revision required" value={statuses['Revision Required'] || 0} note="Returned to Designers" icon={RefreshCw} /><StatCard label="Rejected" value={statuses.Rejected || 0} note="Preserved review records" icon={CircleAlert} tone="amber" /></div><div style={{ marginTop: 17 }}><SectionCard title="Recent decisions">{loading ? <p className="muted">Loading decisions…</p> : history.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>Curriculum</th><th>Institute</th><th>Reviewer</th><th>Decision</th><th>Date</th><th>Feedback</th></tr></thead><tbody>{history.map(row => <tr key={row.key}><td><strong>{row.curriculum_name}</strong><span className="muted" style={{ display: 'block', fontSize: 10 }}>v{row.version}</span></td><td>{row.institute_name}</td><td>{row.reviewer_name || row.reviewer_id || 'Reviewer'}</td><td><StatusBadge status={row.status} /></td><td>{formatDocumentDate(row.decided_at)}</td><td>{row.feedback || row.decision_justification || 'No additional feedback.'}</td></tr>)}</tbody></table></div> : <p className="muted" style={{ fontSize: 12 }}>No completed decisions have been recorded.</p>}</SectionCard></div></div>;
+}
+function ReviewerAnalyzerPicker() {
+    const [queue, setQueue] = useState([]);
+    const [error, setError] = useState('');
+    const [, setLocation] = useLocation();
+    useEffect(() => { mockService.getPendingSubmissions().then(setQueue).catch(e => setError(e.message || 'Unable to load submissions.')); }, []);
+    return <div className="content"><PageHeader eyebrow="Reviewer / Analysis" title="Choose a submission" detail="Curriculum Analyzer runs only against an officially submitted document version." />{error && <div role="alert" className="surface" style={{ padding: 12 }}>{error}</div>}{queue.length === 0 && !error ? <div className="surface" style={{ padding: 28, textAlign: 'center' }}><Inbox size={26} color="#7758aa" /><h2 className="font-display">No pending submissions</h2><p className="muted" style={{ fontSize: 12 }}>Open a pending item from the Reviewer Queue when one is available.</p></div> : <div style={{ display: 'grid', gap: 10 }}>{queue.map(item => <button key={item.submission_id} className="surface" style={{ padding: 16, textAlign: 'left' }} onClick={() => setLocation(`/reviewer/analyzer?submission_id=${encodeURIComponent(item.submission_id)}`)}><strong>{item.curriculum_name}</strong><p className="muted" style={{ fontSize: 11, margin: '5px 0' }}>{item.institute_name} Â· Version {item.version} Â· {item.submission_id}</p><span className="btn btn-primary"><BarChart3 size={14} /> Analyze submitted version</span></button>)}</div>}</div>;
+}
+function InstituteSubmissionPortal({ notify }) {
+    const [curricula, setCurricula] = useState([]);
+    const [submissions, setSubmissions] = useState([]);
+    const [eligible, setEligible] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [busy, setBusy] = useState('');
+    const load = async () => {
+        setLoading(true);
+        try {
+            const [prepared, mine, readyToPublish] = await Promise.all([mockService.getWorkflowCurricula(), mockService.getMySubmissions(), mockService.getEligiblePublications()]);
+            setCurricula(prepared);
+            setSubmissions(mine);
+            setEligible(readyToPublish);
+            setError('');
+        } catch (e) {
+            setError(e.message || 'Unable to load institutional curricula.');
+        } finally {
+            setLoading(false);
+        }
+    };
+    const publish = async item => {
+        setBusy(`publish-${item.submission_id}`); setError('');
+        try { await mockService.publishSubmission(item.submission_id); await load(); notify(`${item.curriculum_name} v${item.version} is now published.`); }
+        catch (e) { setError(e.message || 'Unable to publish this accepted curriculum.'); }
+        finally { setBusy(''); }
+    };
+    useEffect(() => { void load(); }, []);
+    const submit = async item => {
+        setBusy(item.document_id);
+        setError('');
+        try {
+            await mockService.submitPreparedCurriculum({ curriculum_id: item.curriculum_id, document_id: item.document_id });
+            await load();
+            notify('The Designer?s PDF was submitted to the Reviewer Queue.');
+        } catch (e) {
+            setError(e.message || 'Submission failed.');
+        } finally {
+            setBusy('');
+        }
+    };
+    return <div className="content">
+        <PageHeader eyebrow="Institute Representative / Portal Upload" title="Submit curriculum" detail="Review a curriculum sent by a Designer linked to your institution, then submit that exact PDF version for review." action={<button className="btn" onClick={() => void load()}><RefreshCw size={14} /> Refresh</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12, color: '#8e3c39' }}>{error}</div>}
+        {loading ? <div className="surface" style={{ padding: 24 }}>Loading institution curricula?</div> : curricula.length === 0 ? <div className="surface" style={{ padding: 26 }}><h2 className="font-display" style={{ fontSize: 17 }}>No curricula waiting for your institution</h2><p className="muted" style={{ fontSize: 12 }}>A Designer linked to this institution must send a prepared curriculum here first.</p></div> : <div style={{ display: 'grid', gap: 11 }}>{curricula.map(item => <div className="surface" style={{ padding: 17 }} key={item.document_id}>
+            <span className="eyebrow">{item.programme} {item.branch} ? Prepared version {item.version || '?'}</span>
+            <h2 className="font-display" style={{ fontSize: 16, margin: '6px 0' }}>{item.filename}</h2>
+            <p className="muted" style={{ fontSize: 10 }}>Curriculum ID: {item.curriculum_id} ? {item.total_chunks} indexed sections</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9, alignItems: 'center' }}>
+                <button className="btn" disabled={!item.original_available} onClick={async () => { try { const url = await mockService.getDraftDocument(item.curriculum_id, item.document_id); window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) { setError(e.message); } }}><Eye size={14} /> View</button>
+                <button className="btn btn-primary" disabled={!item.original_available || Boolean(busy)} onClick={() => void submit(item)}>{busy === item.document_id ? 'Submitting?' : 'Submit for review'}</button>
+            </div>
+        </div>)}</div>}
+        <div style={{ marginTop: 18 }}><SectionCard title="Submission and feedback history">{submissions.length === 0 ? <p className="muted" style={{ fontSize: 12 }}>No submissions yet.</p> : <div style={{ display: 'grid', gap: 9 }}>{submissions.map(sub => <div className="surface" style={{ padding: 13 }} key={sub.submission_id}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 9 }}><strong style={{ fontSize: 12 }}>{sub.curriculum_name} ? v{sub.version}</strong><StatusBadge status={sub.status} /></div><span className="muted" style={{ fontSize: 10 }}>{formatDocumentDate(sub.submitted_at)} ? {sub.submission_id}</span>{sub.review_history?.map(review => <p key={review.review_id} style={{ fontSize: 11, margin: '8px 0 0' }}><strong>{review.status}:</strong> {review.feedback || 'No additional feedback.'}</p>)}</div>)}</div>}</SectionCard></div>
+        <div style={{ marginTop: 16 }}><SectionCard title="Accepted · ready to publish">{eligible.length ? <div style={{ display: 'grid', gap: 9 }}>{eligible.map(item => <div className="surface" style={{ padding: 13, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }} key={item.submission_id}><div><strong style={{ fontSize: 12 }}>{item.curriculum_name} · v{item.version}</strong><p className="muted" style={{ fontSize: 10, margin: '5px 0 0' }}>Accepted {formatDocumentDate(item.review_history?.at(-1)?.decided_at)}</p></div><button className="btn btn-primary" disabled={Boolean(busy)} onClick={() => void publish(item)}>{busy === `publish-${item.submission_id}` ? 'Publishing…' : 'Publish curriculum'}</button></div>)}</div> : <p className="muted" style={{ fontSize: 12 }}>No accepted submissions are waiting for publication.</p>}</SectionCard></div>
+    </div>;
 }
 function AdminUsers({ notify }) {
-    const [users, setUsers] = useState(mockUsers);
-    return <div className="content"><PageHeader eyebrow="Admin / Access control" title="Users & roles" detail="Role assignment is the boundary around every workspace and action." action={<button className="btn btn-primary" onClick={() => notify('Invite flow opened.')} data-testid="button-invite-user"><Plus size={15} /> Invite user</button>} /><SectionCard title={`${users.length} governed identities`}><table className="data-table"><thead><tr><th>Name</th><th>Institute</th><th>Organization</th><th>Role</th><th>Status</th><th>Last active</th><th>Action</th></tr></thead><tbody>{users.map((user, i) => <tr key={user.id}><td><strong>{user.name}</strong><span className="muted" style={{ display: 'block', marginTop: 4 }}>{user.email}</span></td><td>{user.role === 'admin' || user.role === 'reviewer' ? 'National panel' : user.organization}</td><td>{user.organization}</td><td>{roles[user.role].label}</td><td><StatusBadge status={user.status} /></td><td>{i === 0 ? 'Just now' : `${i + 1}h ago`}</td><td><button className="btn icon-btn" onClick={() => { setUsers(users.map((item) => item.id === user.id ? { ...item, status: item.status === 'Active' ? 'Inactive' : 'Active' } : item)); notify(`${user.name} status updated.`); }} data-testid={`button-toggle-user-${user.id}`}><UserCog size={14} /></button></td></tr>)}</tbody></table></SectionCard></div>;
+    const [users, setUsers] = useState([]);
+    const [institutions, setInstitutions] = useState([]);
+    const [error, setError] = useState('');
+    const [institutionName, setInstitutionName] = useState('');
+    const [newUser, setNewUser] = useState({ name: '', email: '', role: 'designer', password: '' });
+    const reload = async () => {
+        try { const [nextUsers, nextInstitutions] = await Promise.all([mockService.getAdminUsers(), mockService.getInstitutions()]); setUsers(nextUsers); setInstitutions(nextInstitutions); setError(''); }
+        catch (e) { setError(e.message || 'Unable to load user records.'); }
+    };
+    useEffect(() => { void reload(); }, []);
+    const assign = async (user, instituteId) => {
+        try { await mockService.assignInstitution(user.user_id, instituteId); await reload(); notify('Institution link saved.'); }
+        catch (e) { setError(e.message || 'Unable to update institution link.'); }
+    };
+    return <div className="content"><PageHeader eyebrow="Admin / Access control" title="Users & roles" detail="Account roles are stored in MongoDB. Institution links are set explicitly and are never inferred from organization labels." />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 15 }}>
+            <SectionCard title="Create institution"><form onSubmit={async (e) => { e.preventDefault(); try { await mockService.createInstitution(institutionName); setInstitutionName(''); await reload(); notify('Institution created.'); } catch (err) { setError(err.message); } }}><label className="label">Institution name</label><input className="field" required value={institutionName} onChange={e => setInstitutionName(e.target.value)} /><button className="btn btn-primary" style={{ marginTop: 11 }}><Plus size={14} /> Create institution</button></form></SectionCard>
+            <SectionCard title="Provision account"><form onSubmit={async (e) => { e.preventDefault(); try { await mockService.createUser(newUser); setNewUser({ name: '', email: '', role: 'designer', password: '' }); await reload(); notify('Account created. Link it to an institution when appropriate.'); } catch (err) { setError(err.message); } }}><div className="form-grid"><Field label="Name" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} required /><Field label="Email" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} type="email" required /><div><label className="label">Role</label><select className="select" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}><option value="designer">Curriculum Designer</option><option value="institute">Institute Representative</option><option value="reviewer">Reviewer</option><option value="admin">Admin</option></select></div><Field label="Temporary password" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} type="password" minLength={8} required /></div><button className="btn btn-primary" style={{ marginTop: 11 }}><Plus size={14} /> Create account</button></form></SectionCard>
+        </div>
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12, color: '#8e3c39' }}>{error} <button className="btn" onClick={() => void reload()}>Retry</button></div>}
+        <SectionCard title={`${users.length} database identities`}><div className="table-scroll"><table className="data-table"><thead><tr><th>Name / Email</th><th>Role</th><th>Institution link</th><th>Account</th></tr></thead><tbody>{users.map(user => <tr key={user.user_id}><td><strong>{user.name}</strong><span className="muted" style={{ display: 'block', marginTop: 4 }}>{user.email}</span></td><td><select className="select" value={user.role} onChange={async e => { try { await mockService.updateUser(user.user_id, { role: e.target.value }); await reload(); } catch (err) { setError(err.message); } }} aria-label={`Role for ${user.name}`}><option value="admin">Admin</option><option value="designer">Curriculum Designer</option><option value="reviewer">Reviewer</option><option value="institute">Institute Representative</option></select></td><td>{['designer', 'institute'].includes(user.role) ? <select className="select" value={user.institute_id || ''} onChange={e => void assign(user, e.target.value)} aria-label={`Institution for ${user.name}`}><option value="">Not linked</option>{institutions.map(inst => <option key={inst.institute_id} value={inst.institute_id}>{inst.name}</option>)}</select> : <span className="muted">Not required</span>}</td><td><button className={`btn ${user.status === 'Active' ? 'btn-ghost' : 'btn-primary'}`} onClick={async () => { try { await mockService.updateUser(user.user_id, { status: user.status === 'Active' ? 'Inactive' : 'Active' }); await reload(); } catch (err) { setError(err.message); } }}>{user.status === 'Active' ? 'Deactivate' : 'Activate'}</button></td></tr>)}{users.length === 0 && <tr><td colSpan="4" className="muted">Existing demo accounts migrate on first sign-in. Account provisioning and institution links are controlled here.</td></tr>}</tbody></table></div></SectionCard>
+    </div>;
 }
 function AuditLogs() {
-    const logs = [['Meera Nair', 'Policy updated', 'Credit Distribution · v3.2', 'Northstar Institute of Technology', 'Today · 09:42'], ['Dr. Arvind Rao', 'Curriculum approved', 'B.Tech CSE · v1.4', 'Northstar Institute of Technology', 'Yesterday · 16:08'], ['Meera Nair', 'Institute added', 'Northstar Institute', 'Northstar Institute of Technology', 'Yesterday · 11:25'], ['Rohan Kulkarni', 'Course coordinator assigned', 'Data Structures · v4.0', 'Northstar Institute of Technology', '04 Mar · 15:18'], ['Ananya Iyer', 'Document uploaded', 'AICTE Guidelines 2026', 'Crescent Valley University', '04 Mar · 10:02']];
-    return <div className="content"><PageHeader eyebrow="Admin / Traceability" title="Audit logs" detail="Governance events are recorded with actor, institute, entity and timestamp." action={<button className="btn"><Filter size={14} /> Filter logs</button>} /><SectionCard title="Immutable activity register"><table className="data-table"><thead><tr><th>User</th><th>Institute</th><th>Action</th><th>Entity</th><th>Timestamp</th><th>Details</th></tr></thead><tbody>{logs.map((log, i) => <tr key={i}><td><strong>{log[0]}</strong></td><td>{log[3]}</td><td>{log[1]}</td><td>{log[2]}</td><td className="muted">{log[4]}</td><td><button className="btn btn-ghost" data-testid={`button-log-detail-${i}`}><Eye size={14} /> Inspect</button></td></tr>)}</tbody></table></SectionCard></div>;
+    const [events, setEvents] = useState([]);
+    const [query, setQuery] = useState('');
+    const [actionFilter, setActionFilter] = useState('All');
+    const [expanded, setExpanded] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const load = async () => {
+        setLoading(true); setError('');
+        try { setEvents(await mockService.getAdminAuditEvents()); }
+        catch (e) { setError(e.message || 'Unable to load recorded workflow activity.'); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { void load(); }, []);
+    const actions = ['All', ...new Set(events.map(event => event.action).filter(Boolean))];
+    const shown = events.filter(event => {
+        if (actionFilter !== 'All' && event.action !== actionFilter) return false;
+        const text = [event.actor_name, event.institute_name, event.action, event.curriculum_name, event.curriculum_id, event.submission_id, event.details].join(' ').toLowerCase();
+        return text.includes(query.trim().toLowerCase());
+    });
+    return <div className="content"><PageHeader eyebrow="Admin / Traceability" title="Workflow activity" detail="Submission, review, and publication events recorded in workflow history." action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error} <button className="btn" onClick={() => void load()}>Retry</button></div>}
+        <div className="surface" style={{ padding: 12, display: 'flex', gap: 9, flexWrap: 'wrap', marginBottom: 14 }}><input className="field" aria-label="Search workflow activity" placeholder="Search people, curriculum, or event" value={query} onChange={event => setQuery(event.target.value)} style={{ flex: '1 1 260px' }} /><select className="select" aria-label="Filter activity type" value={actionFilter} onChange={event => setActionFilter(event.target.value)} style={{ flex: '0 1 230px' }}>{actions.map(action => <option key={action}>{action}</option>)}</select></div>
+        {loading ? <div className="surface" style={{ padding: 22 }}>Loading recorded activity…</div> : <SectionCard title={`${shown.length} recorded events`}><div className="table-scroll"><table className="data-table"><thead><tr><th>User</th><th>Institute</th><th>Action</th><th>Curriculum</th><th>Timestamp</th><th>Details</th></tr></thead><tbody>{shown.map(event => <><tr key={event.event_id}><td><strong>{event.actor_name}</strong></td><td>{event.institute_name}</td><td><StatusBadge status={event.action} /></td><td>{event.curriculum_name} <span className="muted">v{event.version}</span></td><td className="muted">{formatDocumentDate(event.created_at)}</td><td><button className="btn btn-ghost" onClick={() => setExpanded(expanded === event.event_id ? '' : event.event_id)} aria-expanded={expanded === event.event_id}><Eye size={14} /> {expanded === event.event_id ? 'Hide' : 'Inspect'}</button></td></tr>{expanded === event.event_id && <tr key={`${event.event_id}-details`}><td colSpan="6"><div className="surface" style={{ padding: 11 }}><p style={{ margin: '0 0 6px' }}>{event.details || 'No additional detail was recorded.'}</p>{event.decision_justification && <p className="muted" style={{ margin: '4px 0' }}><strong>Decision justification:</strong> {event.decision_justification}</p>}<span className="muted" style={{ fontSize: 10 }}>Submission {event.submission_id} · Curriculum ID {event.curriculum_id}</span></div></td></tr>}</>)}</tbody></table>{!shown.length && <p className="muted" style={{ padding: 12 }}>{events.length ? 'No events match these filters.' : 'No submission or review events have been recorded yet.'}</p>}</div></SectionCard>}
+    </div>;
 }
 function ReviewQueue({ notify }) {
-    const [selected, setSelected] = useState('c1');
+    const [queue, setQueue] = useState([]);
+    const [selectedId, setSelectedId] = useState('');
+    const [detail, setDetail] = useState(null);
     const [comment, setComment] = useState('');
-    const queue = mockCurricula.filter((item) => item.status === 'Under Review' || item.status === 'Changes Requested');
-    const current = [...queue, { ...mockCurricula[3], status: 'Submitted' }].find((item) => item.id === selected) ?? queue[0];
-    return <div className="content"><PageHeader eyebrow="Reviewer / Expert" title="Pending reviews" detail="AI screening prepares the record. You make the final academic decision." action={<button className="btn"><Filter size={14} /> Filter queue</button>} /><div style={{ display: 'grid', gridTemplateColumns: '1.1fr .9fr', gap: 16 }}><SectionCard title="Review queue"><div style={{ display: 'grid', gap: 10 }}>{[...queue, { ...mockCurricula[3], status: 'Submitted' }].map((item) => <button key={item.id} onClick={() => setSelected(item.id)} className="surface" style={{ textAlign: 'left', padding: 16, border: selected === item.id ? '2px solid #9d7bc7' : undefined, boxShadow: selected === item.id ? 'var(--shadow-inset)' : undefined }} data-testid={`card-pending-review-${item.id}`}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><div><strong style={{ fontSize: 13 }}>{item.name}</strong><p className="muted" style={{ fontSize: 11, margin: '5px 0' }}>Version {item.version} · {item.designer} · Northstar Institute of Technology</p></div><StatusBadge status={item.status} /></div><div style={{ marginTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 5 }}><span className="muted">AI screening score</span><strong>{item.score}/100</strong></div><MiniBar value={item.score} /></div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontSize: 10 }}><span className="muted">Submitted {item.submitted}</span><span className={`badge ${item.score < 80 ? 'badge-red' : 'badge-lavender'}`}>{item.score < 80 ? 'Priority' : 'Standard'}</span></div></button>)}</div></SectionCard><SectionCard title="Selected curriculum documents"><p className="muted" style={{ fontSize: 12, lineHeight: 1.6 }}><strong style={{ color: 'hsl(var(--foreground))' }}>{current?.name} · v{current?.version}</strong><br />Institute: Northstar Institute of Technology · Designer: {current?.designer}</p><div className="surface" style={{ padding: 13, marginTop: 13, display: 'grid', gap: 9 }}><strong style={{ fontSize: 12 }}>Submitted documents</strong>{['Curriculum structure and credit matrix.pdf', 'Course outcomes and assessment mapping.pdf', 'Faculty and resource plan.pdf'].map((doc) => <div key={doc} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', fontSize: 11 }}><span>{doc}</span><button className="btn icon-btn" onClick={() => notify(`Opened ${doc}.`)} data-testid={`button-open-review-document-${doc.slice(0, 8)}`}><Eye size={14} /></button></div>)}</div><div style={{ display: 'grid', gap: 9, margin: '18px 0' }}><button className="btn btn-primary" onClick={() => notify('Approved by human reviewer. AI recommendations remain advisory.')} data-testid="button-approve-review"><CheckCircle2 size={15} /> Approve curriculum</button><button className="btn" onClick={() => notify('Changes requested with reviewer comments.')} data-testid="button-request-changes"><RefreshCw size={15} /> Request changes</button><button className="btn btn-danger" onClick={() => notify('Curriculum rejected with a recorded decision.')} data-testid="button-reject-review"><X size={15} /> Reject</button></div><label className="label">Reviewer comments</label><textarea className="textarea" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Record the reason for this decision..." data-testid="textarea-review-comments" /><button className="btn" style={{ marginTop: 9 }} onClick={() => notify('Reviewer comment saved to the selected curriculum.')} data-testid="button-save-review-comment"><MessageSquareText size={14} /> Save comment</button><div style={{ padding: 12, borderRadius: '.85rem', marginTop: 13, background: '#f8f0e9', border: '1px solid #ecd8ca', fontSize: 11, lineHeight: 1.55 }}><strong style={{ display: 'block', marginBottom: 4 }}>Human review reminder</strong>The AI provides recommendations. The Reviewer makes the final decision.</div></SectionCard></div></div>;
-}
-function ScoreTile({ label, value }) {
-    return <div className="surface" style={{ padding: 14 }}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 9 }}><span>{label}</span><strong>{value}%</strong></div><MiniBar value={value} /></div>;
-}
-function SourceCard({ source }) {
-    return <div style={{ padding: 13, borderRadius: '.9rem', border: '1px solid #ddd1eb', background: '#f9f5fd' }} data-testid={`card-source-${source.section.replaceAll(' ', '-').toLowerCase()}`}><div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#6b4c9c', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.08em' }}><FileCheck2 size={14} /> {source.type}</div><strong style={{ display: 'block', fontSize: 12, marginTop: 7 }}>{source.title}</strong><span className="muted" style={{ fontSize: 10 }}>{source.section}</span><p style={{ fontSize: 11, lineHeight: 1.45, margin: '8px 0 10px' }}>{source.detail}</p><button className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#6b4c9c' }} data-testid="button-view-source"><ExternalLink size={13} /> View source</button></div>;
-}
-function Screener({ notify }) {
-    const [issues, setIssues] = useState([true, true, false]);
-    const issueData = [['HIGH', 'Credit distribution issue', 'Semester 4 contains 28 credits.', 'The distribution conflicts with the applicable curriculum policy.', 'Redistribute credits across semesters.'], ['MEDIUM', 'Learning outcome mapping is thin', 'CO3 is mapped to one assessment only.', 'A single assessment does not demonstrate progressive mastery.', 'Add a practical evaluation and map CO3 explicitly.'], ['LOW', 'Resource metadata incomplete', 'Three reading links have no publication year.', 'Evidence quality is harder to audit without bibliographic context.', 'Complete source metadata before submission.']];
-    return <div className="content"><PageHeader eyebrow="Reviewer / AI-assisted screening" title="Curriculum screener" detail="AI recommendations are advisory; the human reviewer remains the final authority." action={<button className="btn btn-primary" onClick={() => notify('Screening report regenerated from the current curriculum version.')} data-testid="button-run-screening"><RefreshCw size={14} /> Run screening</button>} /><div className="surface soft-gradient" style={{ padding: 20, color: '#34224e', marginBottom: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'center' }}><div><p className="eyebrow" style={{ color: '#5e4276' }}>Screening report · v2.1</p><h2 className="font-display" style={{ margin: '7px 0 5px', fontSize: 20 }}>B.Tech Artificial Intelligence</h2><p style={{ margin: 0, fontSize: 11 }}>Institute: Northstar Institute of Technology · Prepared by the curriculum screener · 06 Mar 2026</p></div><div style={{ textAlign: 'right' }}><strong className="font-display" style={{ fontSize: 43, letterSpacing: '-.08em' }}>82</strong><span style={{ display: 'block', fontSize: 10 }}>OVERALL / 100</span></div></div></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 17 }}><ScoreTile label="AICTE compliance" value={91} /><ScoreTile label="Structure" value={88} /><ScoreTile label="Learning outcomes" value={76} /><ScoreTile label="Assessment" value={80} /><ScoreTile label="Course coverage" value={85} /><ScoreTile label="Resource quality" value={78} /></div><div style={{ display: 'grid', gap: 13 }}>{issueData.map((item, i) => issues[i] && <div className="surface" style={{ padding: 19 }} key={item[1]} data-testid={`card-screening-issue-${i}`}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><div><span className={`badge ${item[0] === 'HIGH' ? 'badge-red' : item[0] === 'MEDIUM' ? 'badge-amber' : 'badge-lavender'}`}>{item[0]}</span><h3 className="font-display" style={{ fontSize: 15, margin: '10px 0 0' }}>{item[1]}</h3></div><button className="btn icon-btn" onClick={() => setIssues(issues.map((active, index) => index === i ? false : active))} data-testid={`button-dismiss-issue-${i}`}><X size={14} /></button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 13, marginTop: 16 }}><div><span className="eyebrow">Problem / evidence</span><p style={{ fontSize: 11, lineHeight: 1.5 }}>{item[2]}</p></div><div><span className="eyebrow">Why</span><p style={{ fontSize: 11, lineHeight: 1.5 }}>{item[3]}</p></div><div><span className="eyebrow">Recommended solution</span><p style={{ fontSize: 11, lineHeight: 1.5 }}>{item[4]}</p></div></div><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn btn-ghost" onClick={() => notify('Comment field ready.')} data-testid={`button-comment-issue-${i}`}><MessageSquareText size={14} /> Add reviewer comment</button></div></div>)}</div><div style={{ marginTop: 17 }}><SectionCard title="Official evidence used by this report"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 11 }}>{sourceCards.map((source) => <SourceCard key={source.section} source={source} />)}</div></SectionCard></div></div>;
+    const [justification, setJustification] = useState('');
+    const [documentUrl, setDocumentUrl] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [, setLocation] = useLocation();
+    const load = async () => {
+        setLoading(true); setError('');
+        try { const rows = await mockService.getPendingSubmissions(); setQueue(rows); const id = rows.some(row => row.submission_id === selectedId) ? selectedId : rows[0]?.submission_id || ''; setSelectedId(id); setDetail(id ? await mockService.getSubmission(id) : null); }
+        catch (e) { setError(e.message || 'Could not load the reviewer queue.'); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { void load(); }, []);
+    const select = async (id) => { setSelectedId(id); setDocumentUrl(''); try { setDetail(await mockService.getSubmission(id)); setError(''); } catch (e) { setError(e.message); } };
+    const decide = async (decision) => {
+        if (!detail) return;
+        try { await mockService.decideSubmission(detail.submission_id, decision, comment, justification); setComment(''); setJustification(''); setDetail(null); await load(); notify(`Decision recorded: ${decision === 'accept' ? 'Accepted' : decision === 'review' ? 'Revision Required' : 'Rejected'}.`); }
+        catch (e) { setError(e.message || 'Decision could not be saved.'); }
+    };
+    const analyzerReport = detail?.analyses?.[0]?.report;
+    const recommendation = analyzerReport?.decision_support?.decision;
+    const overrideRequired = decision => Boolean(recommendation && ({ accept: 'ACCEPT', review: 'REVISE', reject: 'REJECT' }[decision] !== recommendation));
+    return <div className="content"><PageHeader eyebrow="Reviewer / Expert" title="Pending reviews" detail="Database submissions awaiting Reviewer Compliance." action={<button className="btn" onClick={() => void load()}><RefreshCw size={14} /> Refresh queue</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 13, marginBottom: 13, color: '#8e3c39' }}>{error}</div>}
+        {loading ? <div className="surface" style={{ padding: 28, textAlign: 'center' }}>Loading pending submissionsâ€¦</div> : queue.length === 0 ? <div className="surface" style={{ padding: 32, textAlign: 'center' }}><Inbox size={28} color="#7758aa" /><h2 className="font-display">No pending submissions</h2><p className="muted" style={{ fontSize: 12 }}>New portal uploads will appear here.</p></div> : <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 16 }}>
+            <SectionCard title={`Pending queue Â· ${queue.length}`}><div style={{ display: 'grid', gap: 9 }}>{queue.map(item => <button key={item.submission_id} onClick={() => void select(item.submission_id)} className="surface" style={{ textAlign: 'left', padding: 14, border: selectedId === item.submission_id ? '2px solid #9d7bc7' : undefined }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12 }}>{item.curriculum_name}</strong><StatusBadge status={item.status} /></div><p className="muted" style={{ fontSize: 10, margin: '6px 0' }}>{item.institute_name} Â· Version {item.version}</p><span className="muted" style={{ fontSize: 10 }}>ID {item.submission_id} Â· {formatDocumentDate(item.submitted_at)}</span></button>)}</div></SectionCard>
+            <SectionCard title="Reviewer Compliance">{detail && <><span className="eyebrow">{detail.submission_id} Â· Version {detail.version}</span><h2 className="font-display" style={{ fontSize: 19, margin: '8px 0' }}>{detail.curriculum_name}</h2><p className="muted" style={{ fontSize: 11 }}>Curriculum {detail.curriculum_id} Â· Submitted {formatDocumentDate(detail.submitted_at)}</p>{detail.previous_versions?.length > 0 && <details className="surface" style={{ padding: 12, margin: '12px 0' }}><summary><strong>Earlier submitted versions</strong></summary>{detail.previous_versions.map(previous => <div key={previous.submission_id} style={{ paddingTop: 10 }}><span>v{previous.version} Â· {previous.status} Â· {formatDocumentDate(previous.submitted_at)}</span>{previous.analyses?.[0]?.report?.overall_score != null && <span> Â· analyzer score {previous.analyses[0].report.overall_score}</span>}</div>)}</details>}<div className="surface" style={{ padding: 12, margin: '14px 0' }}><strong style={{ fontSize: 12 }}>Submitted PDF</strong><div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}><button className="btn" onClick={async () => { try { if (documentUrl) URL.revokeObjectURL(documentUrl); setDocumentUrl(await mockService.getSubmissionDocument(detail.submission_id)); } catch (e) { setError(e.message); } }}><Eye size={14} /> Securely load document</button>{documentUrl && <a className="btn btn-primary" href={documentUrl} target="_blank" rel="noreferrer">Open PDF</a>}</div></div><button className="btn btn-primary" onClick={() => setLocation(`/reviewer/analyzer?submission_id=${encodeURIComponent(detail.submission_id)}`)}><BarChart3 size={14} /> Analyze this submission</button>{analyzerReport?.decision_support && <DecisionRecommendationPanel support={analyzerReport.decision_support} />}<label className="label" style={{ marginTop: 16 }}>Feedback for the institute and designer</label><textarea className="textarea" value={comment} onChange={e => setComment(e.target.value)} placeholder="Required for revision or rejection decisions." />{recommendation && <div style={{ marginTop: 10 }}><label className="label" htmlFor="decision-justification">Decision justification (required when it differs from {recommendation})</label><textarea id="decision-justification" className="textarea" value={justification} onChange={e => setJustification(e.target.value)} placeholder="Explain the reason for your decision." /></div>}<div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 11 }}><button className="btn btn-primary" disabled={!analyzerReport || Boolean(overrideRequired('accept') && !justification.trim())} onClick={() => void decide('accept')}><CheckCircle2 size={14} /> Accept</button><button className="btn" disabled={!comment.trim() || Boolean(overrideRequired('review') && !justification.trim())} onClick={() => void decide('review')}><RefreshCw size={14} /> Request revision</button><button className="btn btn-danger" disabled={!comment.trim() || Boolean(overrideRequired('reject') && !justification.trim())} onClick={() => void decide('reject')}><X size={14} /> Reject</button></div><p className="muted" style={{ fontSize: 10, lineHeight: 1.5 }}>Run the Analyzer before accepting. Revision and rejection require actionable feedback.</p></>}{!detail && <p className="muted">Select a pending submission.</p>}</SectionCard>
+        </div>}
+    </div>;
 }
 function ReviewSupportingPage({ path }) {
     const title = path.endsWith('history') ? 'Review history' : path.endsWith('policies') ? 'Reviewer policies' : 'Approved curricula';
-    return <div className="content"><PageHeader eyebrow="Reviewer / Expert" title={title} detail="A clear record of evidence, decisions and applicable governance context." /><SectionCard title={title === 'Approved curricula' ? 'Published to the national catalogue' : 'Recent records'}><CurriculumTable items={mockCurricula} onAction={() => undefined} /></SectionCard></div>;
+    const [items, setItems] = useState([]);
+    const [error, setError] = useState('');
+    useEffect(() => { mockService.getReviewHistory().then(rows => setItems(path.endsWith('approved') ? rows.filter(row => ['Accepted', 'Published'].includes(row.status)) : rows)).catch(e => setError(e.message || 'Unable to load review history.')); }, [path]);
+    return <div className="content"><PageHeader eyebrow="Reviewer / Expert" title={title} detail="Recorded decisions and feedback remain attached to each immutable submission version." />{error && <div className="surface" role="alert" style={{ padding: 12 }}>{error}</div>}<SectionCard title={path.endsWith('approved') ? 'Accepted submissions' : 'Completed review records'}>{items.length === 0 ? <p className="muted" style={{ fontSize: 12 }}>No completed review records.</p> : <div style={{ display: 'grid', gap: 9 }}>{items.map(item => <div className="surface" style={{ padding: 13 }} key={item.submission_id}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 9 }}><strong style={{ fontSize: 12 }}>{item.curriculum_name} · v{item.version}</strong><StatusBadge status={item.status} /></div><p className="muted" style={{ fontSize: 10 }}>{item.institute_name} · {formatDocumentDate(item.submitted_at)} · {item.submission_id}</p>{item.review_history?.map(review => <p key={review.review_id} style={{ fontSize: 11, margin: '5px 0' }}><strong>{review.status}:</strong> {review.feedback || 'Accepted for publishing.'}</p>)}</div>)}</div>}</SectionCard></div>;
 }
 function DesignerCurricula({ notify }) {
     const [own, setOwn] = useState([]);
+    const [submissions, setSubmissions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [busy, setBusy] = useState('');
     const [, setLocation] = useLocation();
     const loadCurricula = async () => {
         setLoading(true);
         setError('');
         try {
-            setOwn(submittedCurriculumDocuments(await mockService.getDocuments()));
-        }
-        catch (requestError) {
+            const [docs, history] = await Promise.all([mockService.getDocuments(), mockService.getMySubmissions()]);
+            setOwn(submittedCurriculumDocuments(docs));
+            setSubmissions(history);
+        } catch (requestError) {
             setError(requestError.message || 'Unable to load your curricula.');
-        }
-        finally {
+        } finally {
             setLoading(false);
         }
     };
-    useEffect(() => {
-        void loadCurricula();
-    }, []);
-    return <div className="content"><PageHeader eyebrow="Curriculum Designer" title="My curricula" detail="Your uploaded curricula are stored in the private Designer document store and are ready for analysis." action={<button className="btn btn-primary" onClick={() => setLocation('/designer/create')} data-testid="button-create-curriculum"><Plus size={15} /> Create curriculum</button>} />{loading && <div className="surface" style={{ padding: 28, textAlign: 'center' }} data-testid="curricula-loading"><RefreshCw size={22} className="analyzer-spin" /><h2 className="font-display" style={{ fontSize: 17 }}>Loading your curricula</h2></div>}{!loading && error && <div className="surface" style={{ padding: 24 }} data-testid="curricula-error"><CircleAlert size={18} /><h2 className="font-display" style={{ fontSize: 17 }}>Could not load curricula</h2><p className="muted" style={{ fontSize: 12 }}>{error}</p><button className="btn" onClick={() => void loadCurricula()}><RefreshCw size={14} /> Retry</button></div>}{!loading && !error && own.length === 0 && <div className="surface" style={{ padding: 34, textAlign: 'center' }} data-testid="curricula-empty"><FileText size={28} color="#7758aa" /><h2 className="font-display" style={{ fontSize: 18 }}>No uploaded curricula yet</h2><p className="muted" style={{ fontSize: 12 }}>Create a B.Tech CSE curriculum and upload its PDF to index it for analysis.</p><button className="btn btn-primary" onClick={() => setLocation('/designer/create')}><Upload size={14} /> Upload curriculum PDF</button></div>}{!loading && !error && <div style={{ display: 'grid', gap: 13 }}>{own.map((item, i) => <div className="surface" style={{ padding: 19 }} key={analyzerDocumentKey(item)} data-testid={`card-designer-curriculum-${i}`}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 15, alignItems: 'flex-start' }}><div><span className="eyebrow">{item.programme} {item.branch} · v{item.version || 'Not set'}</span><h2 className="font-display" style={{ fontSize: 18, margin: '7px 0' }}>{item.filename}</h2><p className="muted" style={{ fontSize: 11, margin: 0 }}>Curriculum ID: {item.curriculum_id} · {item.total_chunks} vector chunks · Uploaded {formatDocumentDate(item.uploaded_at)}</p></div><StatusBadge status={item.status || 'Active'} /></div><div style={{ display: 'flex', gap: 8, marginTop: 17 }}><button className="btn btn-primary" onClick={() => setLocation(analyzerDocumentHref(item))} data-testid={`button-analyze-own-curriculum-${i}`}><BarChart3 size={14} /> Analyze curriculum</button></div></div>)}</div>}</div>;
+    const handoffCurriculum = async item => {
+        setBusy(item.document_id);
+        try {
+            const result = await mockService.handoffCurriculum(item.document_id);
+            if (result?.handoff_status !== 'Ready for institute') {
+                throw new Error('The server did not confirm that this curriculum was sent. Refresh and try again.');
+            }
+            // Reflect the persisted response immediately, then reload both sources of
+            // truth so a refresh or a second browser session shows the same state.
+            setOwn(current => current.map(draft => draft.document_id === item.document_id
+                ? { ...draft, handoff_status: result.handoff_status }
+                : draft));
+            await loadCurricula();
+            notify(`${item.filename} was sent to your Institute Representative.`);
+        } catch (requestError) {
+            notify(requestError.message || 'Unable to send this curriculum to your institution.');
+        } finally {
+            setBusy('');
+        }
+    };
+    const removeCurriculum = async item => {
+        try {
+            await mockService.deleteDocument(item.filename, item.document_id);
+            setOwn(current => current.filter(draft => draft.filename !== item.filename));
+            notify(`${item.filename} and its stored PDF were deleted.`);
+        } catch (requestError) {
+            notify(requestError.message || 'Unable to delete this curriculum PDF.');
+        }
+    };
+    useEffect(() => { void loadCurricula(); }, []);
+    return <div className="content">
+        <PageHeader eyebrow="Curriculum Designer" title="My curricula" detail="Prepare each PDF, then send it to your linked Institute Representative for review and submission." action={<button className="btn btn-primary" onClick={() => setLocation('/designer/create')} data-testid="button-create-curriculum"><Plus size={15} /> Create curriculum</button>} />
+        {loading && <div className="surface" style={{ padding: 28, textAlign: 'center' }} data-testid="curricula-loading"><RefreshCw size={22} className="analyzer-spin" /><h2 className="font-display" style={{ fontSize: 17 }}>Loading your curricula</h2></div>}
+        {!loading && error && <div className="surface" style={{ padding: 24 }} data-testid="curricula-error"><CircleAlert size={18} /><h2 className="font-display" style={{ fontSize: 17 }}>Could not load curricula</h2><p className="muted" style={{ fontSize: 12 }}>{error}</p><button className="btn" onClick={() => void loadCurricula()}><RefreshCw size={14} /> Retry</button></div>}
+        {!loading && !error && own.length === 0 && <div className="surface" style={{ padding: 34, textAlign: 'center' }} data-testid="curricula-empty"><FileText size={28} color="#7758aa" /><h2 className="font-display" style={{ fontSize: 18 }}>No uploaded curricula yet</h2><p className="muted" style={{ fontSize: 12 }}>Create a curriculum and upload its PDF to prepare it for institutional submission.</p><button className="btn btn-primary" onClick={() => setLocation('/designer/create')}><Upload size={14} /> Upload curriculum PDF</button></div>}
+        {!loading && !error && <div style={{ display: 'grid', gap: 13 }}>{own.map((item, i) => <div className="surface" style={{ padding: 19 }} key={analyzerDocumentKey(item)} data-testid={`card-designer-curriculum-${i}`}>
+            {(() => {
+                const relatedSubmissions = submissions.filter(sub => sub.curriculum_id === item.curriculum_id);
+                const matchingSubmission = submissions.find(sub =>
+                    [sub.prepared_document_id, sub.document_id].some(id => id != null && String(id) === String(item.document_id))
+                );
+                const handedOff = String(item.handoff_status || '').trim().toLowerCase() === 'ready for institute';
+                const alreadySent = handedOff || Boolean(matchingSubmission);
+                const visibleStatus = matchingSubmission?.status || (handedOff ? 'Sent to institute' : item.status || 'Draft');
+                return <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 15, alignItems: 'flex-start' }}><div><span className="eyebrow">{item.programme} {item.branch} ? v{item.version || 'Not set'}</span><h2 className="font-display" style={{ fontSize: 18, margin: '7px 0' }}>{item.filename}</h2><p className="muted" style={{ fontSize: 11, margin: 0 }}>Curriculum ID: {item.curriculum_id} ? {item.total_chunks} vector chunks ? Uploaded {formatDocumentDate(item.uploaded_at)}</p></div><StatusBadge status={visibleStatus} /></div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 17 }}>
+                <button className="btn" onClick={async () => { try { const url = await mockService.getDraftDocument(item.curriculum_id, item.document_id); window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) { notify(e.message); } }}><Eye size={14} /> View PDF</button>
+                <button className="btn btn-primary" disabled={alreadySent || Boolean(busy)} onClick={() => void handoffCurriculum(item)} data-testid={`button-handoff-designer-curriculum-${i}`}>{busy === item.document_id ? 'Sending…' : alreadySent ? 'Sent to institute' : 'Submit to institute'}</button>
+                {!alreadySent && <button className="btn icon-btn" aria-label={`Delete ${item.filename}`} title="Delete uploaded PDF" onClick={() => void removeCurriculum(item)} data-testid={`button-delete-designer-curriculum-${i}`}><Trash2 size={14} /></button>}
+            </div>
+            {relatedSubmissions.length > 0 && <section style={{ marginTop: 17, borderTop: '1px solid hsl(var(--border))', paddingTop: 13 }}><h3 className="font-display" style={{ fontSize: 14, margin: '0 0 10px' }}>Submission and reviewer feedback</h3>{relatedSubmissions.map(sub => <div className="surface" style={{ padding: 12, marginBottom: 9 }} key={sub.submission_id}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong style={{ fontSize: 12 }}>Version {sub.version}</strong><StatusBadge status={sub.status} /></div><span className="muted" style={{ fontSize: 10 }}>Submitted {formatDocumentDate(sub.submitted_at)}</span>{(sub.review_history || []).map(review => { const requests = (sub.change_requests || []).filter(request => request.review_id === review.review_id); return <div key={review.review_id} className="surface" style={{ padding: 10, marginTop: 9 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong style={{ fontSize: 11 }}>{review.status === 'Revision Required' ? 'Revision requested' : review.status === 'Rejected' ? 'Rejected' : review.status}</strong><span className="muted" style={{ fontSize: 10 }}>{formatDocumentDate(review.decided_at)}</span></div>{review.feedback && <p style={{ fontSize: 11, margin: '7px 0' }}>{review.feedback}</p>}{requests.map(request => <div key={request.request_id} style={{ borderTop: '1px solid hsl(var(--border))', paddingTop: 8, marginTop: 8 }}><strong style={{ fontSize: 11 }}>{request.issue}</strong><p className="muted" style={{ fontSize: 10, margin: '4px 0' }}>{request.explanation}</p><p style={{ fontSize: 10, margin: '4px 0' }}><strong>Required change:</strong> {request.required_corrective_action}</p><StatusBadge status={request.status} />{request.designer_response && <p style={{ fontSize: 10, margin: '6px 0 0' }}><strong>Your response:</strong> {request.designer_response}</p>}<button className="btn" style={{ marginTop: 8 }} onClick={() => { const nextVersion = Number(request.curriculum_version || sub.version || 1) + 1; const params = new URLSearchParams({ curriculum_id: sub.curriculum_id, version: `${nextVersion}.0`, request_id: request.request_id }); setLocation(`/designer/create?${params}`); }}>Prepare corrected version</button></div>)}{!requests.length && review.feedback && <button className="btn" style={{ marginTop: 7 }} onClick={() => { const params = new URLSearchParams({ curriculum_id: sub.curriculum_id, version: `${Number(sub.version || 1) + 1}.0` }); setLocation(`/designer/create?${params}`); }}>Prepare corrected version</button>}</div>; })}{(sub.institution_feedback || []).map(feedback => <div className="surface" style={{ padding: 9, marginTop: 8 }} key={feedback.feedback_id}><strong style={{ fontSize: 10 }}>{feedback.kind === 'change_request' ? 'Institution change request' : 'Institution feedback'} ? {feedback.category}</strong><p style={{ fontSize: 10, margin: '4px 0' }}>{feedback.observation}</p>{feedback.suggested_change && <p className="muted" style={{ fontSize: 10, margin: '4px 0' }}>Suggested change: {feedback.suggested_change}</p>}{feedback.kind === 'change_request' && <><StatusBadge status={feedback.status} />{feedback.designer_response && <p style={{ fontSize: 10 }}>Your response: {feedback.designer_response}</p>}<button className="btn" style={{ marginTop: 7 }} onClick={() => { const params = new URLSearchParams({ curriculum_id: sub.curriculum_id, version: `${Number(sub.version || 1) + 1}.0`, request_id: feedback.feedback_id }); setLocation(`/designer/create?${params}`); }}>Prepare corrected version</button></>}<span className="muted" style={{ display: 'block', fontSize: 9, marginTop: 5 }}>{formatDocumentDate(feedback.created_at)}</span></div>)}</div>)}</section>}
+                </>;
+            })()}
+        </div>)}</div>}
+        {submissions.length > 0 && <div style={{ marginTop: 18 }}><SectionCard title="Institution submission feedback">{submissions.map(sub => <div className="surface" style={{ padding: 12, marginBottom: 8 }} key={sub.submission_id}><div style={{ display: 'flex', justifyContent: 'space-between' }}><strong style={{ fontSize: 12 }}>{sub.curriculum_name} ? v{sub.version}</strong><StatusBadge status={sub.status} /></div>{sub.review_history?.map(review => <p key={review.review_id} style={{ fontSize: 11, marginBottom: 0 }}><strong>{review.status}:</strong> {review.feedback || 'Accepted for publishing.'}</p>)}</div>)}</SectionCard></div>}
+    </div>;
 }
 function CreateWizard({ notify }) {
-    const [step, setStep] = useState(0);
-    const [saved, setSaved] = useState(false);
     const [selectedPdf, setSelectedPdf] = useState(null);
     const [uploading, setUploading] = useState(false);
-    const [details, setDetails] = useState({
-        curriculumId: '',
-        academicYear: '2026',
-        version: '1.0',
+    const [error, setError] = useState('');
+    const [details, setDetails] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return { curriculumId: params.get('curriculum_id') || '', programme: params.get('programme') || '', branch: params.get('branch') || '', academicYear: params.get('year') || '2026', version: params.get('version') || '1.0' };
     });
     const [, setLocation] = useLocation();
-    const updateDetail = (name) => (event) => setDetails((current) => ({ ...current, [name]: event.target.value }));
-    const choosePdf = (file) => {
-        if (!file)
-            return;
-        if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
-            notify('Only PDF files can be uploaded.');
-            return;
-        }
-        if (file.size > 25 * 1024 * 1024) {
-            notify('The curriculum PDF must be 25 MB or smaller.');
-            return;
-        }
+    const updateDetail = name => event => setDetails(current => ({ ...current, [name]: event.target.value }));
+    const choosePdf = file => {
+        if (!file) return;
+        setError('');
+        if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') { setError('Choose a PDF file.'); return; }
+        if (file.size > 25 * 1024 * 1024) { setError('The PDF must be 25 MB or smaller.'); return; }
         const inferredId = file.name.replace(/\.pdf$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
         setSelectedPdf(file);
-        setDetails((current) => ({
-            ...current,
-            curriculumId: current.curriculumId.trim() || inferredId,
-        }));
+        setDetails(current => ({ ...current, curriculumId: current.curriculumId.trim() || inferredId }));
     };
-    const uploadCurriculum = async () => {
-        if (!selectedPdf) {
-            notify('Choose a curriculum PDF before continuing.');
-            return;
-        }
-        if (!details.curriculumId.trim()) {
-            notify('Curriculum ID is required.');
-            return;
-        }
-        setUploading(true);
+    const uploadCurriculum = async event => {
+        event.preventDefault();
+        if (!selectedPdf || !details.curriculumId.trim()) return;
+        setUploading(true); setError('');
         try {
             const result = await mockService.uploadDocument(selectedPdf, {
-                source_type: 'submitted_curriculum',
-                programme: 'B.Tech',
-                branch: 'CSE',
-                curriculum_id: details.curriculumId,
-                year: details.academicYear,
-                version: details.version,
+                source_type: 'submitted_curriculum', programme: details.programme.trim(), branch: details.branch.trim(),
+                curriculum_id: details.curriculumId.trim(), year: details.academicYear, version: details.version.trim(),
             });
             notify(`${result.filename} indexed into ${result.total_chunks} vector chunks.`);
             setLocation('/designer/curricula');
-        }
-        catch (requestError) {
-            notify(requestError.message || 'Unable to upload the curriculum PDF.');
-        }
-        finally {
-            setUploading(false);
-        }
+        } catch (e) { setError(e.message || 'Unable to upload the curriculum PDF.'); }
+        finally { setUploading(false); }
     };
-    const steps = ['Basic information', 'Semester structure', 'Courses', 'Learning outcomes', 'Modules', 'Assessment', 'Resources', 'Review', 'Submit'];
-    const content = [
-        <div className="form-grid" key="basic"><div className="upload-field" style={{ gridColumn: '1 / -1' }}><div><label className="label">Curriculum PDF</label><span className="muted" style={{ fontSize: 11 }}>{selectedPdf ? `${selectedPdf.name} selected` : 'Upload the working curriculum source. PDF only, up to 25 MB.'}</span></div><label className={`btn btn-primary upload-button ${uploading ? 'disabled' : ''}`}><Upload size={14} /> {selectedPdf ? 'Change PDF' : 'Choose PDF'}<input type="file" accept=".pdf,application/pdf" disabled={uploading} onChange={(event) => { choosePdf(event.target.files?.[0]); event.target.value = ''; }} data-testid="input-curriculum-pdf" /></label></div><Field label="Curriculum ID" value={details.curriculumId} onChange={updateDetail('curriculumId')} placeholder="e.g. institute-cse-2026" required /><Field label="Programme" value="B.Tech" readOnly /><Field label="Degree" value="Bachelor of Technology" readOnly /><Field label="Branch" value="CSE" readOnly /><Field label="Academic year" value={details.academicYear} onChange={updateDetail('academicYear')} type="number" required /><Field label="Version" value={details.version} onChange={updateDetail('version')} /><Field label="Duration" value="4 years / 8 semesters" readOnly /><div style={{ gridColumn: '1 / -1' }}><label className="label">Description</label><textarea className="textarea" defaultValue="B.Tech CSE curriculum submitted for evidence-based analysis against official AICTE references." data-testid="textarea-curriculum-description" /></div></div>,
-        <div key="semesters"><div className="surface" style={{ padding: 15, marginBottom: 10 }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><strong>Semester 1</strong><span className="badge badge-green">24 credits · valid</span></div><p className="muted" style={{ fontSize: 11 }}>Mathematics I · Programming Fundamentals · Physics · Engineering Graphics</p></div><div className="surface" style={{ padding: 15 }}><div style={{ display: 'flex', justifyContent: 'space-between' }}><strong>Semester 2</strong><span className="badge badge-amber">22 credits · review</span></div><p className="muted" style={{ fontSize: 11 }}>Data Structures · DBMS · Discrete Mathematics · Communication Skills</p></div><button className="btn" style={{ marginTop: 12 }} onClick={() => notify('New semester added to draft.')} data-testid="button-add-semester"><Plus size={14} /> Add semester</button></div>,
-        <div key="courses"><EditableRow code="AI201" name="Machine Learning" credits="4" /><EditableRow code="AI202" name="Deep Learning" credits="4" /><EditableRow code="CS204" name="Database Management Systems" credits="4" /><button className="btn" style={{ marginTop: 9 }} onClick={() => notify('Course editor opened.')} data-testid="button-add-course"><Plus size={14} /> Add course</button></div>,
-        <div key="outcomes"><p className="muted" style={{ fontSize: 12 }}>Define measurable outcomes and map them to assessments. AI suggestions remain clearly advisory.</p>{['CO1 · Explain core learning paradigms and data preparation choices.', 'CO2 · Implement and evaluate supervised learning pipelines.', 'CO3 · Analyze model behaviour, fairness and operational risk.'].map((outcome, i) => <div className="surface" style={{ padding: 14, marginTop: 9, display: 'flex', gap: 12 }} key={outcome}><span className="badge badge-lavender">CO{i + 1}</span><span style={{ fontSize: 12 }}>{outcome}</span></div>)}<button className="btn" style={{ marginTop: 12 }} onClick={() => notify('AI suggestion added as a draft outcome.')} data-testid="button-ai-outcome"><Sparkles size={14} /> Suggest outcome</button></div>,
-        <StructureEditor label="Module structure" detail="Course → Module → Topic → Learning outcome" key="modules" />,
-        <StructureEditor label="Assessment plan" detail="Exams · assignments · quizzes · labs · projects" key="assessment" />,
-        <StructureEditor label="Resource set" detail="Books · research papers · videos · practical references" key="resources" />,
-        <div key="review" className="surface" style={{ padding: 17 }}><span className="eyebrow">Ready for review</span><h3 className="font-display" style={{ fontSize: 18, margin: '8px 0' }}>B.Tech Artificial Intelligence · v2.2</h3><p className="muted" style={{ fontSize: 12, lineHeight: 1.6 }}>8 semesters · 162 credits · 34 courses · 12 outcomes. One validation warning remains in Semester 2 workload.</p><div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 14 }}><CircleAlert size={15} color="#a2732c" /><span style={{ fontSize: 11 }}>Review warning before submission</span></div></div>,
-        <div key="submit" style={{ textAlign: 'center', padding: 25 }}><div className="brand-mark" style={{ margin: '0 auto 12px' }}><Send size={20} /></div><h3 className="font-display" style={{ fontSize: 19 }}>Submit to AI screening and human review?</h3><p className="muted" style={{ fontSize: 12, maxWidth: 400, margin: '8px auto 17px', lineHeight: 1.6 }}>The reviewer remains the final decision-maker. You can continue editing while this version is Draft.</p><button className="btn btn-primary" onClick={() => { setSaved(true); notify('Curriculum submitted. Reviewer queue updated.'); }} data-testid="button-submit-curriculum"><Send size={14} /> Submit curriculum</button></div>,
-    ];
-    return <div className="content"><PageHeader eyebrow="Curriculum Designer / Builder" title="Create curriculum" detail="Upload a B.Tech CSE curriculum PDF to index it in your private Designer store." action={<span className="badge badge-lavender">Designer-owned</span>} />{saved ? <div className="surface" style={{ padding: 40, textAlign: 'center' }}><CheckCircle2 size={34} color="#50865d" /><h2 className="font-display" style={{ margin: '12px 0 5px' }}>Submitted for screening</h2><p className="muted" style={{ fontSize: 12 }}>B.Tech CSE v{details.version} is now in the governed review workflow.</p></div> : <div className="surface" style={{ padding: 21 }}><div style={{ display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 18, marginBottom: 18, borderBottom: '1px solid hsl(var(--border))' }}>{steps.map((item, i) => <button key={item} className={`btn ${i === step ? 'btn-primary' : 'btn-ghost'}`} style={{ whiteSpace: 'nowrap', padding: '0 10px' }} onClick={() => setStep(i)} data-testid={`button-wizard-step-${i}`}><span style={{ opacity: .7 }}>{i + 1}</span> {item}</button>)}</div><div style={{ minHeight: 260 }}>{content[step]}</div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, paddingTop: 16, borderTop: '1px solid hsl(var(--border))' }}><button className="btn" disabled={step === 0 || uploading} onClick={() => setStep(Math.max(0, step - 1))} data-testid="button-wizard-back"><ArrowLeft size={14} /> Back</button>{step === 0 ? <button className="btn btn-primary" disabled={uploading || !selectedPdf} onClick={() => void uploadCurriculum()} data-testid="button-upload-curriculum">{uploading ? <RefreshCw size={14} className="analyzer-spin" /> : <Upload size={14} />} {uploading ? 'Indexing PDF' : 'Upload curriculum'}</button> : <button className="btn btn-primary" disabled={step === steps.length - 1} onClick={() => setStep(Math.min(steps.length - 1, step + 1))} data-testid="button-wizard-next">Continue <ArrowRight size={14} /></button>}</div></div>}</div>;
+    const isRevision = new URLSearchParams(window.location.search).has('request_id');
+    return <div className="content"><PageHeader eyebrow="Curriculum Designer" title={isRevision ? 'Prepare corrected version' : 'Upload curriculum'} detail="Upload the working PDF. Each distinct version is indexed and preserved for institutional handoff and review." />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        <form className="surface" style={{ maxWidth: 820, padding: 20 }} onSubmit={uploadCurriculum}>
+            <div className="form-grid">
+                <Field label="Curriculum ID" value={details.curriculumId} onChange={updateDetail('curriculumId')} placeholder="Use the same ID when preparing a correction" required />
+                <Field label="Programme" value={details.programme} onChange={updateDetail('programme')} placeholder="For example, B.Tech" required />
+                <Field label="Branch" value={details.branch} onChange={updateDetail('branch')} placeholder="For example, CSE" required />
+                <Field label="Academic year" value={details.academicYear} onChange={updateDetail('academicYear')} type="number" required />
+                <Field label="Version" value={details.version} onChange={updateDetail('version')} required />
+                <div className="upload-field" style={{ gridColumn: '1 / -1' }}><div><label className="label">Curriculum PDF</label><span className="muted" style={{ fontSize: 11 }}>{selectedPdf ? `${selectedPdf.name} selected` : 'PDF only, up to 25 MB.'}</span></div><label className={`btn btn-primary upload-button ${uploading ? 'disabled' : ''}`}><Upload size={14} /> {selectedPdf ? 'Choose a different PDF' : 'Choose PDF'}<input type="file" accept=".pdf,application/pdf" disabled={uploading} onChange={event => { choosePdf(event.target.files?.[0]); event.target.value = ''; }} data-testid="input-curriculum-pdf" /></label></div>
+            </div>
+            {isRevision && <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>This correction will be saved as a new upload version. Previous submissions and reviewer feedback remain in the history.</p>}
+            <button className="btn btn-primary" style={{ marginTop: 18 }} disabled={uploading || !selectedPdf || !details.curriculumId.trim() || !details.version.trim()} data-testid="button-upload-curriculum">{uploading ? <RefreshCw size={14} className="analyzer-spin" /> : <Upload size={14} />} {uploading ? 'Indexing PDF?' : 'Upload and index'}</button>
+        </form>
+    </div>;
 }
 function Field({ label, value, onChange, ...inputProps }) { return <div><label className="label">{label}</label><input className="field" {...(onChange ? { value, onChange } : { defaultValue: value })} {...inputProps} data-testid={`input-wizard-${label.toLowerCase().replaceAll(' ', '-')}`} /></div>; }
-function EditableRow({ code, name, credits }) { return <div className="surface" style={{ padding: 13, display: 'grid', gridTemplateColumns: '.7fr 1.8fr .5fr auto', gap: 10, alignItems: 'center', marginBottom: 9 }}><span className="badge badge-lavender">{code}</span><strong style={{ fontSize: 12 }}>{name}</strong><span className="muted" style={{ fontSize: 11 }}>{credits} credits</span><button className="btn icon-btn" data-testid={`button-edit-course-${code}`}><Pencil size={14} /></button></div>; }
-function StructureEditor({ label, detail }) { return <div className="surface" style={{ padding: 19 }}><span className="eyebrow">{label}</span><h3 className="font-display" style={{ fontSize: 18, margin: '7px 0' }}>{detail}</h3><div style={{ display: 'grid', gap: 8, marginTop: 16 }}>{['Core concepts and vocabulary', 'Applied lab / case study', 'Reflection and assessment checkpoint'].map((item, i) => <div key={item} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 10, borderRadius: '.75rem', background: '#f6f1fa', fontSize: 12 }}><span className="badge badge-lavender">{i + 1}</span>{item}<Pencil size={13} style={{ marginLeft: 'auto' }} /></div>)}</div><button className="btn" style={{ marginTop: 14 }} data-testid={`button-add-${label.toLowerCase().replaceAll(' ', '-')}`}><Plus size={14} /> Add item</button></div>; }
 function AssistantPage({ notify }) {
-    const [question, setQuestion] = useState('What learning outcomes should I define for a DBMS course?');
+    const [question, setQuestion] = useState('');
     const [answer, setAnswer] = useState(null);
     const [loading, setLoading] = useState(false);
-    const ask = async (event) => {
+    const [error, setError] = useState('');
+    const ask = async event => {
         event.preventDefault();
-        if (!question.trim())
-            return;
-        setLoading(true);
-        try {
-            setAnswer(await mockService.askAssistant(question));
-        }
-        catch (error) {
-            notify(error.message);
-        }
-        finally {
-            setLoading(false);
-        }
+        if (!question.trim() || loading) return;
+        setLoading(true); setError('');
+        try { setAnswer(await mockService.askAssistant(question.trim())); }
+        catch (requestError) { setError(requestError.message || 'Unable to query indexed documents.'); }
+        finally { setLoading(false); }
     };
-    const sources = answer?.sources?.length ? answer.sources : sourceCards.slice(0, 2);
-    return <div className="content"><PageHeader eyebrow="Designer / Evidence assistant" title="AI assistant" detail="Ask against AICTE sources and curriculum context, not an unrestricted chat model." /><div style={{ maxWidth: 980 }}><SectionCard title="Relevant official documents"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>{sourceCards.slice(0, 2).map((source) => <SourceCard key={source.section} source={source} />)}</div></SectionCard><div style={{ marginTop: 16 }}><SectionCard title="Curriculum question"><div style={{ padding: 17, minHeight: 250, background: '#f9f5fd', borderRadius: 1, border: '1px solid #e1d6ef' }}>{loading ? <div className="muted" style={{ fontSize: 12 }}>Reading official sources and preparing a recommendation…</div> : answer ? <><span className="badge badge-slate">Your question</span><p style={{ fontSize: 13, lineHeight: 1.55 }}>{answer.question}</p><div style={{ marginTop: 17, padding: 14, borderRadius: '.8rem', background: '#f1e7fb', border: '1px solid #d8c6eb' }}><div style={{ color: '#73529e', fontSize: 10, fontWeight: 800, letterSpacing: '.08em' }}><Sparkles size={13} style={{ verticalAlign: 'middle', marginRight: 5 }} /> AI RECOMMENDATION</div><p style={{ fontSize: 12, lineHeight: 1.65, marginBottom: 0 }}>{answer.answer}</p></div><div style={{ display: 'flex', gap: 8, marginTop: 14 }}><button className="btn" onClick={() => notify('Recommendation copied into the outcome draft.')} data-testid="button-apply-ai-answer"><Check size={14} /> Apply to draft</button><button className="btn btn-ghost" onClick={() => setAnswer(null)} data-testid="button-new-question">New question</button></div></> : <div style={{ textAlign: 'center', padding: '50px 10px' }}><Bot size={27} color="#8061ac" /><p style={{ fontSize: 13, margin: '12px 0 4px' }}>Ask a curriculum question</p><span className="muted" style={{ fontSize: 11 }}>Responses carry official source references.</span></div>}</div><form onSubmit={ask} style={{ display: 'flex', gap: 8, marginTop: 13 }}><input className="field" value={question} onChange={(e) => setQuestion(e.target.value)} data-testid="input-assistant-question" /><button className="btn btn-primary icon-btn" data-testid="button-ask-assistant"><Send size={15} /></button></form></SectionCard></div></div></div>;
+    const copyRecommendation = async () => {
+        try { await navigator.clipboard.writeText(answer.answer); notify('Recommendation copied to clipboard.'); }
+        catch { setError('Clipboard access is unavailable in this browser.'); }
+    };
+    const sources = answer?.sources || [];
+    return <div className="content"><PageHeader eyebrow="Designer / Evidence assistant" title="AI assistant" detail="Ask a curriculum question and review the document excerpts returned by the indexed source search." /><div style={{ maxWidth: 980 }}><SectionCard title="Curriculum question"><div style={{ padding: 17, minHeight: 210, background: '#f9f5fd', borderRadius: 1, border: '1px solid #e1d6eb' }}>{loading ? <div className="muted" role="status">Searching indexed documents?</div> : answer ? <><span className="badge badge-slate">Your question</span><p style={{ fontSize: 13, lineHeight: 1.55 }}>{answer.question}</p><div style={{ marginTop: 17, padding: 14, borderRadius: '.8rem', background: '#f1e7fb', border: '1px solid #d8c6eb' }}><div style={{ color: '#73529e', fontSize: 10, fontWeight: 800, letterSpacing: '.08em' }}><Sparkles size={13} style={{ verticalAlign: 'middle', marginRight: 5 }} /> RESPONSE</div><p style={{ fontSize: 12, lineHeight: 1.65, marginBottom: 0 }}>{answer.answer}</p></div><button className="btn" style={{ marginTop: 12 }} onClick={() => void copyRecommendation()}><Check size={14} /> Copy response</button></> : <div style={{ textAlign: 'center', padding: '40px 10px' }}><Bot size={27} color="#8061ac" /><p style={{ fontSize: 13, margin: '12px 0 4px' }}>Ask a curriculum question</p></div>}</div><form onSubmit={ask} style={{ display: 'flex', gap: 8, marginTop: 13 }}><input className="field" value={question} onChange={event => setQuestion(event.target.value)} aria-label="Curriculum question" /><button className="btn btn-primary icon-btn" type="submit" disabled={loading || !question.trim()}><Send size={15} /></button></form>{error && <div className="surface" role="alert" style={{ padding: 12, marginTop: 10 }}>{error}</div>}</SectionCard><div style={{ marginTop: 16 }}><SectionCard title="Retrieved document evidence">{sources.length ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>{sources.map((source, index) => <SourceCard key={`${source.title}-${source.section}-${index}`} source={source} />)}</div> : <p className="muted" style={{ fontSize: 12 }}>{answer ? 'No source excerpts were returned for this answer.' : 'Source excerpts for your latest question will appear here.'}</p>}</SectionCard></div></div></div>;
 }
 function renderAnswerInline(text) {
     return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => part.startsWith('**') && part.endsWith('**') ? <strong key={index}>{part.slice(2, -2)}</strong> : part);
@@ -519,6 +800,9 @@ function RagAnswer({ content }) {
         index += 1;
     }
     return <div className="rag-answer">{blocks}</div>;
+}
+function SourceCard({ source }) {
+    return <article className="surface" style={{ padding: 13 }}><span className="eyebrow">{source.type || 'Retrieved document excerpt'}</span><strong style={{ display: 'block', fontSize: 12, marginTop: 7 }}>{source.title}</strong><span className="muted" style={{ fontSize: 10 }}>{source.section}</span><p style={{ fontSize: 11, lineHeight: 1.45, margin: '8px 0 0' }}>{source.detail}</p></article>;
 }
 function RagAssistantPage({ notify }) {
     const [question, setQuestion] = useState('');
@@ -578,11 +862,11 @@ function RagAssistantPage({ notify }) {
             <SectionCard title="Conversation">
                 <div className="rag-conversation" aria-live="polite">
                     {!messages.length && <div className="rag-empty"><Bot size={27} color="#8061ac" /><p>Start a grounded curriculum conversation</p><span>Ask about policies, course structure, outcomes, or assessment using the PDFs indexed by the Admin.</span></div>}
-                    {messages.map((message, index) => <div className={`rag-message ${message.role}`} key={`${message.role}-${index}`}><span className="badge badge-slate">{message.role === 'user' ? 'You' : 'AI Assistant'}</span>{message.role === 'assistant' ? <RagAnswer content={message.content} /> : <p>{message.content}</p>}{message.role === 'assistant' && <button className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => notify('Recommendation copied into the curriculum draft.')} data-testid={`button-apply-ai-answer-${index}`}><Check size={14} /> Apply to draft</button>}</div>)}
-                    {loading && <div className="rag-message assistant"><span className="badge badge-slate">AI Assistant</span><p className="muted">Searching indexed PDF vectors and preparing a grounded answer…</p></div>}
+                    {messages.map((message, index) => <div className={`rag-message ${message.role}`} key={`${message.role}-${index}`}><span className="badge badge-slate">{message.role === 'user' ? 'You' : 'AI Assistant'}</span>{message.role === 'assistant' ? <RagAnswer content={message.content} /> : <p>{message.content}</p>}{message.role === 'assistant' && <button className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={async () => { try { await navigator.clipboard.writeText(message.content); notify('Response copied to clipboard.'); } catch { notify('Clipboard access is unavailable in this browser.'); } }} data-testid={`button-copy-ai-answer-${index}`}><Check size={14} /> Copy response</button>}</div>)}
+                    {loading && <div className="rag-message assistant"><span className="badge badge-slate">AI Assistant</span><p className="muted">Searching indexed PDF vectors and preparing a grounded answerâ€¦</p></div>}
                 </div>
                 <form onSubmit={ask} style={{ display: 'flex', gap: 8, marginTop: 13 }}>
-                    <input className="field" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask a question about the indexed curriculum documents…" disabled={loading} data-testid="input-assistant-question" />
+                    <input className="field" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask a question about the indexed curriculum documents." disabled={loading} data-testid="input-assistant-question" />
                     <button className="btn btn-primary icon-btn" aria-label="Send question" disabled={loading || !question.trim()} data-testid="button-ask-assistant"><Send size={15} /></button>
                 </form>
             </SectionCard>
@@ -590,7 +874,7 @@ function RagAssistantPage({ notify }) {
                 <SectionCard title="Chat history" action={<button className="btn" onClick={startNewChat} disabled={loading} data-testid="button-new-assistant-chat"><Plus size={14} /> New chat</button>}>
                     {chats.length ? <div className="chat-history-list" aria-label="Previous chats">
                         {chats.map((chat) => <button key={chat.id} type="button" className={`chat-history-item ${chat.id === activeChatId ? 'active' : ''}`} onClick={() => { setActiveChatId(chat.id); setQuestion(''); }} data-testid={`button-chat-history-${chat.id}`}>
-                            <MessageSquareText size={15} /><span><strong>{chat.title}</strong><small>{chat.messages.length} messages · {new Date(chat.updatedAt).toLocaleDateString()}</small></span><ChevronRight size={15} />
+                            <MessageSquareText size={15} /><span><strong>{chat.title}</strong><small>{chat.messages.length} messages Â· {new Date(chat.updatedAt).toLocaleDateString()}</small></span><ChevronRight size={15} />
                         </button>)}
                     </div> : <p className="muted" style={{ fontSize: 12, margin: 0 }}>Your completed conversations will appear here. Select one to continue where you left off.</p>}
                 </SectionCard>
@@ -604,21 +888,96 @@ function RagAssistantPage({ notify }) {
     </div>;
 }
 function ResourcePage() {
+    const [subject, setSubject] = useState('');
+    const [curriculumId, setCurriculumId] = useState('');
+    const [curricula, setCurricula] = useState([]);
     const [filter, setFilter] = useState('All');
-    const resources = [['Deep Learning', 'Book', 'Ian Goodfellow · Neural Networks & Learning Representations', 'Backpropagation · optimization · CNN'], ['Practical CNN Lab', 'Practical resource', 'A guided image classification exercise with a clear evaluation rubric.', 'CNN · regularization · metrics'], ['Representation Learning Review', 'Research paper', 'A concise survey for the Neural Networks module.', 'Embeddings · transfer learning · evaluation'], ['Visualizing Model Training', 'Video', 'Short lecture with annotated training curves.', 'Optimization · diagnostics']];
-    return <div className="content"><PageHeader eyebrow="Designer / Resource assistant" title="Recommended resources" detail="Context-aware recommendations for B.Tech AI · Deep Learning · Neural Networks." action={<select className="select" style={{ width: 145 }} value={filter} onChange={(e) => setFilter(e.target.value)} data-testid="select-resource-filter"><option>All</option><option>Book</option><option>Research paper</option><option>Video</option><option>Practical resource</option></select>} /><div style={{ display: 'grid', gap: 11 }}>{resources.filter((item) => filter === 'All' || item[1] === filter).map((item) => <div className="surface" style={{ padding: 17, display: 'grid', gridTemplateColumns: '1fr .8fr auto', gap: 16, alignItems: 'center' }} key={item[0]}><div><span className="eyebrow">{item[1]}</span><h3 className="font-display" style={{ fontSize: 15, margin: '6px 0' }}>{item[0]}</h3><p className="muted" style={{ fontSize: 11, margin: 0 }}>{item[2]}</p></div><div><span className="eyebrow">Covered topics</span><p style={{ fontSize: 11, lineHeight: 1.5, marginBottom: 0 }}>{item[3]}</p></div><button className="btn" data-testid={`button-save-resource-${item[0].replaceAll(' ', '-')}`}><BookMarked size={14} /> Save</button></div>)}</div></div>;
+    const [results, setResults] = useState(null);
+    const [saved, setSaved] = useState([]);
+    const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [initializing, setInitializing] = useState(true);
+    const [error, setError] = useState('');
+    useEffect(() => {
+        Promise.all([mockService.getSavedResources(), mockService.getResourceSearchHistory()])
+            .then(([resources, searches]) => { setSaved(resources); setHistory(searches); })
+            .catch(e => setError(e.message || 'Unable to load saved resources.'))
+            .finally(() => setInitializing(false));
+        mockService.getDocuments()
+            .then(documents => setCurricula(submittedCurriculumDocuments(documents)))
+            .catch(e => setError(current => current || e.message || 'Unable to load your curriculum list.'));
+    }, []);
+    const search = async (value = subject) => {
+        const query = value.trim();
+        if (query.length < 2) { setError('Enter a subject with at least two characters.'); return; }
+        setLoading(true); setError(''); setSubject(query);
+        try {
+            setResults(await mockService.searchResources(query));
+            setHistory(await mockService.getResourceSearchHistory());
+        } catch (e) {
+            setError(e.message || 'Resource search failed.');
+        } finally {
+            setLoading(false);
+        }
+    };
+    const filtered = (results?.resources || []).filter(resource => filter === 'All' || resource.resource_type.toLowerCase() === filter.toLowerCase().replace(/s$/, ''));
+    const isSaved = resourceId => saved.some(item => item.resource_id === resourceId);
+    const save = async resource => {
+        try {
+            const row = await mockService.saveResource({ ...resource, subject: results.subject, curriculum_id: curriculumId.trim() || null });
+            setSaved(current => current.some(item => item.resource_id === row.resource_id) ? current : [row, ...current]);
+        } catch (e) { setError(e.message || 'Unable to save this resource.'); }
+    };
+    const remove = async resourceId => {
+        try { await mockService.removeSavedResource(resourceId); setSaved(current => current.filter(item => item.resource_id !== resourceId)); }
+        catch (e) { setError(e.message || 'Unable to remove the saved resource.'); }
+    };
+    const card = (resource, savedCard = false) => <article className="surface" style={{ padding: 16, display: 'grid', gridTemplateColumns: '1fr auto', gap: 14 }} key={resource.resource_id}>
+        <div><span className="eyebrow">{resource.resource_type} ? {resource.source}</span><h3 className="font-display" style={{ fontSize: 15, margin: '6px 0' }}>{resource.title}</h3><p className="muted" style={{ fontSize: 11, margin: '4px 0' }}>{resource.author || 'Author not listed'}{resource.publisher ? ` ? ${resource.publisher}` : ''}{resource.publication_year ? ` ? ${resource.publication_year}` : ''}</p>{resource.description && <p style={{ fontSize: 12, lineHeight: 1.5, margin: '8px 0' }}>{resource.description}</p>}{resource.topics?.length > 0 && <p className="muted" style={{ fontSize: 10, margin: '6px 0' }}>Topics: {resource.topics.join(' ? ')}</p>}<small className="muted">{resource.availability}</small></div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, alignItems: 'stretch' }}><a className="btn" href={resource.url} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Open source</a>{savedCard || isSaved(resource.resource_id) ? <button className="btn" onClick={() => void remove(resource.resource_id)}><Trash2 size={14} /> Remove saved</button> : <button className="btn btn-primary" onClick={() => void save(resource)}><BookMarked size={14} /> Save resource</button>}</div>
+    </article>;
+    return <div className="content">
+        <PageHeader eyebrow="Designer / Resource assistant" title="Find learning resources" detail="Search live book, scholarly, repository, and video catalogs by subject." />
+        <SectionCard title="Search by subject"><form onSubmit={event => { event.preventDefault(); void search(); }} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 9, alignItems: 'end' }}><div><label className="label" htmlFor="resource-subject">Enter subject name</label><input id="resource-subject" className="field" value={subject} onChange={event => setSubject(event.target.value)} placeholder="Artificial Intelligence, Data Structures?" data-testid="input-resource-subject" /></div><div><label className="label" htmlFor="resource-curriculum">Associate saved resources (optional)</label><select id="resource-curriculum" className="select" value={curriculumId} onChange={event => setCurriculumId(event.target.value)}><option value="">Subject only</option>{[...new Map(curricula.map(item => [item.curriculum_id, item])).values()].map(item => <option key={item.curriculum_id} value={item.curriculum_id}>{item.curriculum_id} ? {item.filename}</option>)}</select></div><button className="btn btn-primary" type="submit" disabled={loading || initializing || subject.trim().length < 2}><Search size={14} /> {loading ? 'Searching?' : 'Search'}</button></form>{history.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 12 }}><span className="eyebrow" style={{ alignSelf: 'center' }}>Recent searches</span>{history.slice(0, 8).map(item => <button className="btn btn-ghost" key={`${item.subject}-${item.searched_at}`} onClick={() => void search(item.subject)}>{item.subject}</button>)}</div>}</SectionCard>
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginTop: 12 }}>{error}</div>}
+        {results?.source_errors?.length > 0 && <div className="surface" role="status" style={{ padding: 12, marginTop: 12 }}>{results.source_errors.map(item => item.message).join(' ')}</div>}
+        {results && <div style={{ marginTop: 15 }}><div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 10 }}>{['All', 'Books', 'Research Papers', 'Articles', 'Videos', 'Practical Resources'].map(item => <button key={item} className={`btn ${filter === item ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter(item)}>{item}</button>)}</div>{loading ? <div className="surface" style={{ padding: 20 }}>Searching resource catalogs?</div> : filtered.length ? <div style={{ display: 'grid', gap: 9 }}>{filtered.map(resource => card(resource))}</div> : <div className="surface" style={{ padding: 20 }}><p className="muted" style={{ margin: 0 }}>No resources of this type were returned for ?{results.subject}?. Try another filter or search term.</p></div>}</div>}
+        <div style={{ marginTop: 18 }}><SectionCard title={`Saved resources${saved.length ? ` ? ${saved.length}` : ''}`}>{initializing ? <p className="muted">Loading saved resources?</p> : saved.length ? <div style={{ display: 'grid', gap: 9 }}>{saved.map(item => card(item, true))}</div> : <p className="muted" style={{ fontSize: 12 }}>Resources you save will appear here for this Designer account.</p>}</SectionCard></div>
+    </div>;
 }
 function ComparisonPage() {
-    const rows = [['Core AI', 'Strong', 'Good', 'Strong', 'Your outcomes need one more progressive assessment example.'], ['Machine Learning', 'Strong', 'Strong', 'Good', 'No material gap in this category.'], ['Deep Learning', 'Good', 'Partial', 'Strong', 'Reference B includes a stronger advanced vision and representation-learning sequence.'], ['Generative AI', 'Partial', 'Missing', 'Good', 'Add responsible generative AI, evaluation and safety coverage.'], ['MLOps', 'Missing', 'Partial', 'Good', 'Reference curricula include deployment, monitoring and model governance studios.'], ['Industry Project', 'Good', 'Strong', 'Strong', 'Add a larger client-style project with delivery evidence.'], ['Practical Hours', 'Partial', 'Good', 'Strong', 'Increase lab and project hours to match the stronger reference set.']];
-    return <div className="content"><PageHeader eyebrow="Designer / Anonymous benchmarks" title="Curriculum comparison" detail="Reference curricula are anonymized by design. No institute identity or private metadata is exposed." /><SectionCard title="B.Tech Artificial Intelligence v2.1 compared with approved reference sets"><table className="data-table"><thead><tr><th>Category</th><th>Your curriculum</th><th>Reference Curriculum A</th><th>Reference Curriculum B</th><th>What is missing</th></tr></thead><tbody>{rows.map((row) => <tr key={row[0]}><td><strong>{row[0]}</strong></td>{row.slice(1, 4).map((cell, i) => <td key={i}><span className={`badge ${cell === 'Strong' ? 'badge-green' : cell === 'Good' ? 'badge-lavender' : cell === 'Partial' ? 'badge-amber' : 'badge-red'}`}>{cell}</span></td>)}<td><span className="muted" style={{ fontSize: 11, lineHeight: 1.4 }}>{row[4]}</span></td></tr>)}</tbody></table></SectionCard><div style={{ marginTop: 16 }}><SectionCard title="Recommended improvement"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}><div><span className="eyebrow">Problem</span><p style={{ fontSize: 12 }}>MLOps is missing from the current map.</p></div><div><span className="eyebrow">Evidence</span><p style={{ fontSize: 12 }}>Reference sets include deployment and monitoring outcomes.</p></div><div><span className="eyebrow">Why</span><p style={{ fontSize: 12 }}>Graduates need a bridge from model building to operation.</p></div><div><span className="eyebrow">Suggested revision</span><p style={{ fontSize: 12, color: '#694a98' }}>Add a 2-credit model operations studio.</p></div></div></SectionCard></div></div>;
+    const [items, setItems] = useState([]);
+    const [curriculumId, setCurriculumId] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const load = async () => {
+        setLoading(true); setError('');
+        try {
+            const rows = await mockService.getImprovementHistory();
+            setItems(rows);
+            setCurriculumId(current => rows.some(row => row.curriculum_id === current) ? current : rows[0]?.curriculum_id || '');
+        } catch (e) { setError(e.message || 'Unable to load stored curriculum analyses.'); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { void load(); }, []);
+    const item = items.find(row => row.curriculum_id === curriculumId);
+    const versions = item?.versions || [];
+    const maxScore = Math.max(1, ...versions.map(row => Number(row.score) || 0));
+    return <div className="content"><PageHeader eyebrow="Designer / Version comparison" title="Curriculum comparison" detail="Compare analyzer scores and findings from saved submission versions." action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        {loading ? <div className="surface" style={{ padding: 20 }}>Loading stored analyses…</div> : !items.length ? <div className="surface" style={{ padding: 24 }}><p className="muted" style={{ margin: 0 }}>Version comparison appears after a Reviewer analyzes submitted curricula.</p></div> : <>
+            <div className="surface" style={{ padding: 9, display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>{items.map(row => <button key={row.curriculum_id} className={`btn ${row.curriculum_id === curriculumId ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCurriculumId(row.curriculum_id)}>{row.curriculum_name}</button>)}</div>
+            {item && <SectionCard title={`${item.curriculum_name} · saved analyzer history`}>
+                {versions.length > 1 && <div className="version-score-chart" aria-label="Stored analyzer score by submitted version">{versions.map(row => <div className="version-score-column" key={row.submission_id}><div className="version-score-value">{row.score == null ? '—' : row.score}</div><div className="version-score-bar"><span style={{ height: `${Math.max(0, Math.min(100, ((Number(row.score) || 0) / maxScore) * 100))}%` }} /></div><strong>v{row.version}</strong></div>)}</div>}
+                <div className="table-scroll"><table className="data-table"><thead><tr><th>Version</th><th>Analysis date</th><th>Score</th><th>Change</th><th>Resolved findings</th><th>Open findings</th><th>New findings</th></tr></thead><tbody>{versions.map((row, index) => { const prior = versions[index - 1]; const delta = prior?.score != null && row.score != null ? Number((row.score - prior.score).toFixed(2)) : null; const findings = row.finding_snapshot || []; return <tr key={row.submission_id}><td>v{row.version}</td><td>{formatDocumentDate(row.analyzed_at)}</td><td>{row.score == null ? 'Not evaluated' : row.score}</td><td>{delta == null ? 'Baseline' : `${delta > 0 ? '+' : ''}${delta}`}</td><td>{findings.filter(finding => finding.status === 'Resolved').length}</td><td>{findings.filter(finding => ['Open', 'In Progress', 'Reopened', 'Newly Detected'].includes(finding.status)).length}</td><td>{findings.filter(finding => finding.status === 'Newly Detected').length}</td></tr>; })}</tbody></table></div>
+                {versions.length === 1 && <p className="muted" style={{ fontSize: 11 }}>One analyzed version is stored; comparison will appear when another version is analyzed.</p>}
+            </SectionCard>}
+        </>}
+    </div>;
 }
-function LegacyAnalyzerMock({ notify }) {
-    const [active, setActive] = useState([true, true, true]);
-    const issues = [['HIGH', 'Resource quality is uneven', '64% of sources have complete bibliographic metadata.', 'Students and reviewers cannot reliably audit the source set.', 'Complete metadata and replace two undated links.'], ['MEDIUM', 'Industry relevance can be stronger', 'No dedicated MLOps or deployment studio appears in the map.', 'The programme ends at model training rather than delivery.', 'Add a model operations studio in Semester 7.'], ['LOW', 'Assessment balance', 'Practical evaluation is 12% of the total plan.', 'The stated hands-on outcomes deserve a stronger assessment signal.', 'Increase lab and project weighting by 4%.']];
-    return <div className="content"><PageHeader eyebrow="Designer / Curriculum health report" title="Curriculum analyzer" detail="A decision aid for the designer — not an approval authority." action={<button className="btn btn-primary" onClick={() => notify('Health report recalculated.')} data-testid="button-recalculate-analyzer"><RefreshCw size={14} /> Recalculate</button>} /><div className="surface soft-gradient" style={{ padding: 22, marginBottom: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><p className="eyebrow">Curriculum health report</p><h2 className="font-display" style={{ fontSize: 21, margin: '6px 0' }}>B.Tech Artificial Intelligence · v2.0</h2><span style={{ fontSize: 11 }}>6 dimensions · 24 evidence checks</span></div><div style={{ textAlign: 'center' }}><strong className="font-display" style={{ fontSize: 44, letterSpacing: '-.08em' }}>78</strong><div style={{ fontSize: 10 }}>OVERALL / 100</div></div></div></div><div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>{[['Structure', 89], ['Compliance', 91], ['Industry relevance', 68], ['Learning outcomes', 72], ['Assessment', 75], ['Resources', 64], ['Skill coverage', 79]].map(([label, value]) => <ScoreTile key={label} label={label} value={value} />)}</div><div style={{ display: 'grid', gap: 12, marginTop: 17 }}>{issues.map((issue, i) => active[i] && <div className="surface" style={{ padding: 18 }} key={issue[1]}><div style={{ display: 'flex', justifyContent: 'space-between' }}><div><span className={`badge ${issue[0] === 'HIGH' ? 'badge-red' : issue[0] === 'MEDIUM' ? 'badge-amber' : 'badge-lavender'}`}>{issue[0]}</span><h3 className="font-display" style={{ fontSize: 15, margin: '8px 0' }}>{issue[1]}</h3></div><button className="btn icon-btn" onClick={() => setActive(active.map((item, index) => index === i ? false : item))} data-testid={`button-dismiss-analyzer-${i}`}><X size={14} /></button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 13 }}><div><span className="eyebrow">Problem</span><p style={{ fontSize: 11 }}>{issue[1]}</p></div><div><span className="eyebrow">Evidence</span><p style={{ fontSize: 11 }}>{issue[2]}</p></div><div><span className="eyebrow">Why it matters</span><p style={{ fontSize: 11 }}>{issue[3]}</p></div><div><span className="eyebrow">Recommended solution</span><p style={{ fontSize: 11 }}>{issue[4]}</p></div></div><div style={{ display: 'flex', gap: 8, marginTop: 11 }}><button className="btn btn-primary" onClick={() => notify('Suggestion applied to the draft plan.')} data-testid={`button-apply-analyzer-${i}`}><Check size={14} /> Apply suggestion</button><button className="btn" onClick={() => notify('Manual editor opened for this finding.')} data-testid={`button-edit-analyzer-${i}`}><Pencil size={14} /> Edit manually</button></div></div>)}</div></div>;
-}
-function Analyzer({ notify }) {
+function Analyzer({ notify, submissionId = null }) {
     const [documents, setDocuments] = useState([]);
+    const [submission, setSubmission] = useState(null);
     const [selectedKey, setSelectedKey] = useState('');
     const [report, setReport] = useState(null);
     const [selectedCriterion, setSelectedCriterion] = useState(null);
@@ -630,6 +989,18 @@ function Analyzer({ notify }) {
         setError('');
         setSelectedCriterion(null);
         try {
+            if (submissionId) {
+                const selected = await mockService.getSubmission(submissionId);
+                setSubmission(selected);
+                const result = await mockService.analyzeSubmission(submissionId);
+                const item = { curriculum_id: selected.curriculum_id, document_id: selected.document_id, filename: `${selected.document_filename} Â· v${selected.version}`, version: selected.version };
+                setDocuments([item]);
+                setSelectedKey(analyzerDocumentKey(item));
+                setReport(result);
+                setState('ready');
+                if (announce) notify('Analysis saved to this submission version.');
+                return;
+            }
             let available = documents;
             if (!available.length) {
                 available = submittedCurriculumDocuments(await mockService.getDocuments());
@@ -666,16 +1037,17 @@ function Analyzer({ notify }) {
     const criteria = report?.criteria || [];
     const checkCount = criteria.reduce((total, criterion) => total + (criterion.checks?.length || 0), 0);
     const aicteReferenceUnavailable = report?.aicte_reference_available === false;
-    const overallScore = aicteReferenceUnavailable ? 'Not Evaluable' : report?.overall_score == null ? '—' : report.overall_score;
+    const overallScore = aicteReferenceUnavailable ? 'Not Evaluable' : report?.overall_score == null ? 'â€”' : report.overall_score;
     const partialCurriculum = isPartialCurriculum(report);
 
     return <div className="content">
         <PageHeader
-            eyebrow="Designer / Curriculum health report"
+            eyebrow={submissionId ? `Reviewer / Submission ${submission?.submission_id || submissionId}` : 'Reviewer / Curriculum health report'}
             title="Curriculum analyzer"
-            detail="Deterministic B.Tech CSE scores with check-level AICTE and curriculum evidence."
+            detail={submission ? `${submission.curriculum_name} Â· version ${submission.version} Â· ${submission.document_filename}` : 'Deterministic evaluation with check-level AICTE and curriculum evidence.'}
             action={<button className="btn btn-primary" disabled={state === 'loading'} onClick={() => void analyze(null, true)} data-testid="button-recalculate-analyzer"><RefreshCw size={14} /> {state === 'loading' ? 'Analyzing' : 'Recalculate'}</button>}
         />
+        {submission?.analyses?.length > 0 && <div className="surface" style={{ padding: 12, marginBottom: 14 }}><strong style={{ fontSize: 11 }}>Previous analysis runs for this version: {submission.analyses.length}</strong><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 4 }}>This new report will be retained alongside earlier runs.</span></div>}
         {documents.length > 1 && <div className="surface" style={{ padding: 13, marginBottom: 15 }}>
             <label className="label" htmlFor="analyzer-curriculum">Submitted curriculum</label>
             <select id="analyzer-curriculum" className="select" value={selectedKey} onChange={(event) => {
@@ -683,23 +1055,43 @@ function Analyzer({ notify }) {
                 if (next)
                     void analyze(next);
             }} data-testid="select-analyzer-curriculum">
-                {documents.map((document) => <option value={analyzerDocumentKey(document)} key={analyzerDocumentKey(document)}>{document.filename} · {document.curriculum_id}</option>)}
+                {documents.map((document) => <option value={analyzerDocumentKey(document)} key={analyzerDocumentKey(document)}>{document.filename} Â· {document.curriculum_id}</option>)}
             </select>
         </div>}
-        {state === 'loading' && <div className="surface" style={{ padding: 28, textAlign: 'center' }} data-testid="analyzer-loading"><RefreshCw size={22} className="analyzer-spin" /><h2 className="font-display" style={{ fontSize: 17 }}>Analyzing curriculum</h2><p className="muted" style={{ fontSize: 12 }}>Extracting the submitted curriculum and evaluating deterministic checks…</p></div>}
+        {state === 'loading' && <div className="surface" style={{ padding: 28, textAlign: 'center' }} data-testid="analyzer-loading"><RefreshCw size={22} className="analyzer-spin" /><h2 className="font-display" style={{ fontSize: 17 }}>Analyzing curriculum</h2><p className="muted" style={{ fontSize: 12 }}>Extracting the submitted curriculum and evaluating deterministic checksâ€¦</p></div>}
         {state === 'empty' && <AnalyzerState title="No submitted curriculum found" detail="Upload a PDF classified as submitted_curriculum with a curriculum_id before running the analyzer." testId="analyzer-empty" />}
         {state === 'not-found' && <AnalyzerState title="Curriculum not found" detail={error} testId="analyzer-not-found" onRetry={() => void analyze()} />}
         {state === 'ambiguous' && <AnalyzerState title="Ambiguous curriculum selection" detail={error} testId="analyzer-ambiguous" onRetry={() => void analyze()} />}
         {state === 'invalid-metadata' && <AnalyzerState title="Invalid curriculum metadata" detail={error} testId="analyzer-invalid-metadata" onRetry={() => void analyze()} />}
         {state === 'error' && <AnalyzerState title="Analyzer API error" detail={error} testId="analyzer-error" onRetry={() => void analyze()} />}
         {state === 'ready' && report && <>
-            {aicteReferenceUnavailable && <div className="surface analyzer-issues-unavailable" style={{ margin: '0 0 16px' }} data-testid="analyzer-aicte-reference-unavailable"><CircleAlert size={20} /><div><strong>AICTE Reference: Unavailable</strong><span>{report.aicte_reference_message || 'Official AICTE reference documents are not currently available. AICTE-based compliance evaluation cannot be completed.'}</span><span>Curriculum extraction: Available · AICTE evidence: Unavailable · AICTE-based score: Not Evaluable</span></div></div>}
+            {report.decision_support && <DecisionRecommendationPanel support={report.decision_support} />}
+            <MandatoryRequirementStatus criteria={criteria} />
+            {submission?.previous_versions?.length > 0 && (() => {
+                const previousAnalysis = submission.previous_versions.find(row => row.analyses?.length)?.analyses?.[0];
+                const previous = previousAnalysis?.report;
+                const oldScore = previous?.overall_score;
+                const delta = oldScore != null && report.overall_score != null ? Number((report.overall_score - oldScore).toFixed(2)) : null;
+                const previousFindings = previousAnalysis?.finding_snapshot || [];
+                const previousOpen = new Set(previousFindings.filter(row => row.status !== 'Resolved').map(row => row.finding_id));
+                const previousResolved = new Set(previousFindings.filter(row => row.status === 'Resolved').map(row => row.finding_id));
+                const currentFindings = new Set((report.decision_support?.reasons || []).map(row => row.finding_id));
+                const resolved = [...previousOpen].filter(id => !currentFindings.has(id)).length;
+                const introduced = [...currentFindings].filter(id => !previousOpen.has(id)).length;
+                const reopened = [...currentFindings].filter(id => previousResolved.has(id)).length;
+                const reasonById = new Map((report.decision_support?.reasons || []).map(row => [row.finding_id, row.title]));
+                const resolvedNames = [...previousOpen].filter(id => !currentFindings.has(id)).map(id => previousFindings.find(row => row.finding_id === id)?.original_issue || id);
+                const introducedNames = [...currentFindings].filter(id => !previousOpen.has(id) && !previousResolved.has(id)).map(id => reasonById.get(id) || id);
+                const reopenedNames = [...currentFindings].filter(id => previousResolved.has(id)).map(id => reasonById.get(id) || id);
+                return <div className="surface" style={{ padding: 13, marginBottom: 14 }} data-testid="submission-version-comparison"><strong>Version comparison</strong><p className="muted" style={{ fontSize: 11 }}>Current v{submission.version}: {report.overall_score ?? 'Not evaluated'} · Previous analyzed version: {oldScore ?? 'No saved analysis'}{delta != null ? ` · Score change ${delta > 0 ? '+' : ''}${delta}` : ''}</p><p style={{ fontSize: 11, marginBottom: 0 }}>Since the previous analyzed version: {resolved} finding(s) no longer flagged · {introduced} newly flagged · {reopened} reopened.</p>{previousAnalysis && <details style={{ marginTop: 8 }}><summary style={{ cursor: 'pointer', fontSize: 11 }}>View finding changes</summary><div style={{ display: 'grid', gap: 6, marginTop: 8 }}>{[["Resolved", resolvedNames], ["Newly flagged", introducedNames], ["Reopened", reopenedNames]].filter(([, names]) => names.length).map(([label, names]) => <p key={label} style={{ fontSize: 10, margin: 0 }}><strong>{label}:</strong> {names.join('; ')}</p>)}</div></details>}</div>;
+            })()}
+            {aicteReferenceUnavailable && <div className="surface analyzer-issues-unavailable" style={{ margin: '0 0 16px' }} data-testid="analyzer-aicte-reference-unavailable"><CircleAlert size={20} /><div><strong>AICTE Reference: Unavailable</strong><span>{report.aicte_reference_message || 'Official AICTE reference documents are not currently available. AICTE-based compliance evaluation cannot be completed.'}</span><span>Curriculum extraction: Available Â· AICTE evidence: Unavailable Â· AICTE-based score: Not Evaluable</span></div></div>}
             <div className="surface soft-gradient" style={{ padding: 22, marginBottom: 16 }} data-testid="analyzer-summary">
                 <div className="analyzer-summary-grid">
                     <div>
-                        <p className="eyebrow">Curriculum health report · {report.scoring_version}</p>
+                        <p className="eyebrow">Curriculum health report Â· {report.scoring_version}</p>
                         <h2 className="font-display" style={{ fontSize: 21, margin: '6px 0' }}>{selectedDocument?.filename || report.curriculum_id}</h2>
-                        <span style={{ fontSize: 11 }}>B.Tech CSE · {criteria.length} criteria · {checkCount} evidence checks</span>
+                        <span style={{ fontSize: 11 }}>B.Tech CSE Â· {criteria.length} criteria Â· {checkCount} evidence checks</span>
                         <div className="analyzer-scope" data-testid="analyzer-document-scope">
                             <span className="eyebrow">Document Scope</span>
                             <strong>{documentScopeLabel(report.document_scope)}</strong>
@@ -720,6 +1112,7 @@ function Analyzer({ notify }) {
                 {criteria.map((criterion) => <AnalyzerScoreTile key={criterion.criterion} criterion={criterion} onClick={() => setSelectedCriterion(criterion)} />)}
             </div>
             <AnalyzerIssues report={report} />
+            {submissionId && <div style={{ marginTop: 16 }}><AnalyzerFinalDecision submissionId={submissionId} recommendation={report.decision_support?.decision} notify={notify} /></div>}
         </>}
         {selectedCriterion && report && <AnalyzerCriterionModal criterion={selectedCriterion} report={report} onClose={() => setSelectedCriterion(null)} />}
     </div>;
@@ -756,7 +1149,7 @@ function AnalyzerIssueCard({ issue }) {
             <span className="badge badge-slate">{issue.criterion.replaceAll('_', ' ')}</span>
         </div>
         <div className="analyzer-issue-grid">
-            <div><span className="eyebrow">Evidence / related criterion</span>{evidence.length ? evidence.map((item, index) => <div className="analyzer-issue-evidence" key={`${item.source || 'curriculum'}-${item.page_number}-${item.chunk_index}-${index}`}><p>{item.excerpt}</p><small>{item.source || 'Submitted curriculum'} · {item.page_number != null ? `Page ${item.page_number}` : 'Page unavailable'} · {item.chunk_index != null ? `Chunk ${item.chunk_index}` : 'Chunk unavailable'}</small></div>) : <p>The recommendation is grounded in the related deterministic checks.</p>}<small>{(issue.related_check_ids || []).join(' · ')}</small></div>
+            <div><span className="eyebrow">Evidence / related criterion</span>{evidence.length ? evidence.map((item, index) => <div className="analyzer-issue-evidence" key={`${item.source || 'curriculum'}-${item.page_number}-${item.chunk_index}-${index}`}><p>{item.excerpt}</p><small>{item.source || 'Submitted curriculum'} Â· {item.page_number != null ? `Page ${item.page_number}` : 'Page unavailable'} Â· {item.chunk_index != null ? `Chunk ${item.chunk_index}` : 'Chunk unavailable'}</small></div>) : <p>The recommendation is grounded in the related deterministic checks.</p>}<small>{(issue.related_check_ids || []).join(' Â· ')}</small></div>
             <div><span className="eyebrow">Why it matters</span><p>{issue.why_it_matters}</p></div>
             <div><span className="eyebrow">Recommended solution</span><p>{issue.recommended_solution}</p></div>
         </div>
@@ -787,20 +1180,77 @@ function AnalyzerEvidenceList({ title, evidence, official = false }) {
         {official && <strong>{item.source}</strong>}
         {item.heading && <span>{item.heading}</span>}
         <p>{item.excerpt}</p>
-        <small>{item.page_number != null ? `Page ${item.page_number}` : 'Page unavailable'} · {item.chunk_index != null ? `Chunk ${item.chunk_index}` : 'Chunk unavailable'}</small>
+        <small>{item.page_number != null ? `Page ${item.page_number}` : 'Page unavailable'} Â· {item.chunk_index != null ? `Chunk ${item.chunk_index}` : 'Chunk unavailable'}</small>
     </div>) : <p className="muted" style={{ fontSize: 11 }}>No evidence excerpt is available for this check.</p>}</div>;
+}
+
+function DecisionRecommendationPanel({ support }) {
+    if (!support) return null;
+    const title = support.decision === 'INSUFFICIENT_EVIDENCE'
+        ? 'Insufficient Evidence — Manual Review Required'
+        : `Recommended: ${support.decision}`;
+    const badgeClass = support.decision === 'ACCEPT' ? 'badge-green' : support.decision === 'REJECT' ? 'badge-red' : 'badge-amber';
+    return <section className="surface" style={{ padding: 16, margin: '14px 0' }} data-testid="decision-support-panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}><h2 className="font-display" style={{ fontSize: 17, margin: 0 }}>Reviewer decision support</h2><span className={`badge ${badgeClass}`}>{title}</span></div>
+        <p style={{ fontSize: 12, lineHeight: 1.6 }}>{support.summary}</p>
+        <p className="muted" style={{ fontSize: 10 }}>Advisory evidence summary. The Reviewer makes and records the final decision.</p>
+        {support.reasons?.length > 0 ? <div style={{ display: 'grid', gap: 9 }}>{support.reasons.map((reason, index) => <article className="surface" style={{ padding: 11 }} key={`${reason.finding_id}-${index}`}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}><strong style={{ fontSize: 12 }}>{reason.title}</strong><span className="badge badge-amber">{reason.severity}</span><span className="muted" style={{ fontSize: 10 }}>{reason.criterion} · {reason.rule_type}</span></div>
+            <p style={{ fontSize: 11, margin: '7px 0' }}>{reason.explanation}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 9 }}><div><span className="eyebrow">Expected</span><p style={{ fontSize: 11, margin: '4px 0' }}>{displayAnalyzerValue(reason.expected)}</p></div><div><span className="eyebrow">Observed</span><p style={{ fontSize: 11, margin: '4px 0' }}>{displayAnalyzerValue(reason.actual)}</p></div><div><span className="eyebrow">Recommended correction</span><p style={{ fontSize: 11, margin: '4px 0' }}>{reason.recommended_action}</p></div></div>
+            {[...(reason.curriculum_evidence || []).map(row => ({ ...row, kind: 'Curriculum evidence' })), ...(reason.aicte_evidence || []).map(row => ({ ...row, kind: 'AICTE reference' }))].map((row, rowIndex) => <p key={`${row.kind}-${rowIndex}`} className="muted" style={{ fontSize: 10, margin: '7px 0 0' }}><strong>{row.kind}{row.page_number != null ? ` · p. ${row.page_number}` : ''}:</strong> {row.excerpt}</p>)}
+        </article>)}</div> : <p className="muted" style={{ fontSize: 11 }}>No failed or partial findings were returned. Confirm evidence and policy manually.</p>}
+    </section>;
+}
+
+function MandatoryRequirementStatus({ criteria }) {
+    const checks = (criteria || []).flatMap(criterion => (criterion.checks || [])
+        .filter(check => check.rule_type === 'AICTE_MANDATORY')
+        .map(check => ({ ...check, criterion: criterion.criterion })));
+    return <section className="surface" style={{ padding: 15, marginBottom: 14 }} data-testid="mandatory-requirement-status">
+        <h2 className="font-display" style={{ fontSize: 16, margin: '0 0 9px' }}>Configured mandatory criteria</h2>
+        {checks.length ? <div style={{ display: 'grid', gap: 7 }}>{checks.map(check => <div key={check.check_id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}><div><strong style={{ fontSize: 11 }}>{check.title}</strong><span className="muted" style={{ display: 'block', fontSize: 10 }}>{check.criterion}</span></div><StatusBadge status={checkStatusLabel(check.status)} /></div>)}</div> : <p className="muted" style={{ fontSize: 11, margin: 0 }}>No analyzer checks are configured as explicitly mandatory. Confirm applicable policy requirements during manual review.</p>}
+    </section>;
+}
+
+function AnalyzerFinalDecision({ submissionId, recommendation, notify }) {
+    const [feedback, setFeedback] = useState('');
+    const [justification, setJustification] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [, setLocation] = useLocation();
+    const differs = decision => Boolean(recommendation && ({ accept: 'ACCEPT', review: 'REVISE', reject: 'REJECT' }[decision] !== recommendation));
+    const decide = async decision => {
+        setSaving(true); setError('');
+        try {
+            await mockService.decideSubmission(submissionId, decision, feedback, justification);
+            notify(`Decision recorded: ${decision === 'accept' ? 'Accepted' : decision === 'review' ? 'Revision requested' : 'Rejected'}.`);
+            setLocation('/reviewer/reviews');
+        } catch (e) { setError(e.message || 'Decision could not be saved.'); }
+        finally { setSaving(false); }
+    };
+    return <SectionCard title="Final Reviewer decision">
+        {error && <div className="surface" role="alert" style={{ padding: 10, marginBottom: 10 }}>{error}</div>}
+        <label className="label" htmlFor="analyzer-final-feedback">Reviewer feedback</label><textarea id="analyzer-final-feedback" className="textarea" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Required for a revision request or rejection." />
+        {recommendation && <><label className="label" htmlFor="analyzer-final-justification" style={{ marginTop: 10 }}>Justification when your decision differs from {recommendation}</label><textarea id="analyzer-final-justification" className="textarea" value={justification} onChange={e => setJustification(e.target.value)} placeholder="Explain why you are overriding the advisory recommendation." /></>}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 11 }}>
+            <button className="btn btn-primary" disabled={saving || Boolean(differs('accept') && !justification.trim())} onClick={() => void decide('accept')}><CheckCircle2 size={14} /> Accept</button>
+            <button className="btn" disabled={saving || !feedback.trim() || Boolean(differs('review') && !justification.trim())} onClick={() => void decide('review')}><RefreshCw size={14} /> Request revision</button>
+            <button className="btn btn-danger" disabled={saving || !feedback.trim() || Boolean(differs('reject') && !justification.trim())} onClick={() => void decide('reject')}><X size={14} /> Reject</button>
+        </div>
+    </SectionCard>;
 }
 
 function AnalyzerCriterionModal({ criterion, report, onClose }) {
     const score = criterionScoreLabel(criterion);
     const statusTone = { pass: 'badge-green', partial: 'badge-amber', fail: 'badge-red', not_evaluable: 'badge-slate' };
-    return <Modal title={`${criterion.label.toUpperCase()} — ${score}`} onClose={onClose} wide>
+    return <Modal title={`${criterion.label.toUpperCase()} â€” ${score}`} onClose={onClose} wide>
         <div className="analyzer-modal-summary">
             <div><span className="eyebrow">Evaluated score (quality)</span><strong>{criterionCalculation(criterion)}</strong></div>
             <div><span className="eyebrow">Evaluation coverage (evidence completeness)</span><strong>{coverageCalculation(criterion)}</strong></div>
         </div>
         <p className="muted" style={{ fontSize: 11, lineHeight: 1.55, margin: '-3px 0 14px' }} data-testid="analyzer-score-coverage-explanation">Required checks receive zero marks when reliable evidence is missing. Scope-dependent checks are excluded when they fall outside the submitted document, and evaluation coverage shows how much could be evaluated.</p>
-        {(criterion.low_coverage || hasLowEvaluationCoverage(criterion.evaluation_coverage)) && <div className="analyzer-limited-note"><CircleAlert size={15} /><span><strong>Limited evidence.</strong> Fewer than half of this criterion’s possible check marks were evaluable.</span></div>}
+        {(criterion.low_coverage || hasLowEvaluationCoverage(criterion.evaluation_coverage)) && <div className="analyzer-limited-note"><CircleAlert size={15} /><span><strong>Limited evidence.</strong> Fewer than half of this criterionâ€™s possible check marks were evaluable.</span></div>}
         <div className="analyzer-check-list">
             {(criterion.checks || []).map((check) => <section className={`analyzer-check analyzer-check-${check.status}`} key={check.check_id} data-testid={`analyzer-check-${check.check_id}`}>
                 <div className="analyzer-check-heading">
@@ -835,49 +1285,306 @@ function AnalyzerCriterionModal({ criterion, report, onClose }) {
     </Modal>;
 }
 
-function DesignerChanges({ notify }) {
-    const [changes, setChanges] = useState(mockChanges);
-    return <div className="content"><PageHeader eyebrow="Designer / Next version inputs" title="Change requests" detail="Accepting a request informs the next curriculum version. It never edits a published version directly." /><div style={{ display: 'grid', gap: 12 }}>{changes.map((change) => <div className="surface" style={{ padding: 19 }} key={change.id}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><span className="eyebrow">CHANGE REQUEST #{change.id}</span><h3 className="font-display" style={{ fontSize: 17, margin: '7px 0' }}>{change.course}</h3></div><div style={{ display: 'flex', gap: 7 }}><span className={`badge ${change.priority === 'High' ? 'badge-red' : 'badge-amber'}`}>{change.priority} priority</span><StatusBadge status={change.status} /></div></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 15, marginTop: 13 }}><div><span className="eyebrow">Issue</span><p style={{ fontSize: 12 }}>{change.issue}</p></div><div><span className="eyebrow">Suggested change</span><p style={{ fontSize: 12 }}>{change.suggestion}</p></div><div><span className="eyebrow">Reason / evidence</span><p style={{ fontSize: 12 }}>{change.reason}</p></div></div><div style={{ display: 'flex', gap: 8, marginTop: 8 }}><button className="btn btn-primary" onClick={() => { setChanges(changes.map((item) => item.id === change.id ? { ...item, status: 'Included in Next Version' } : item)); notify(`${change.id} added to the next version backlog.`); }} data-testid={`button-accept-change-${change.id}`}><Check size={14} /> Add to next version</button><button className="btn" onClick={() => notify('Discussion note opened.')} data-testid={`button-discuss-change-${change.id}`}><MessageSquareText size={14} /> Discuss</button></div></div>)}</div></div>;
+function DesignerChanges({ notify, reviewer = false }) {
+    const [requests, setRequests] = useState([]);
+    const [statusFilter, setStatusFilter] = useState('All');
+    const [curriculumFilter, setCurriculumFilter] = useState('All');
+    const [responses, setResponses] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [busy, setBusy] = useState('');
+    const [, setLocation] = useLocation();
+    const load = async () => {
+        setLoading(true); setError('');
+        try { setRequests(await mockService.getChangeRequests()); }
+        catch (e) { setError(e.message || 'Unable to load review requests.'); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { void load(); }, []);
+    const curriculumOptions = [...new Map(requests.map(item => [item.curriculum_id, item.curriculum_name])).entries()];
+    const visible = requests.filter(item => (statusFilter === 'All' || item.status === statusFilter) && (curriculumFilter === 'All' || item.curriculum_id === curriculumFilter));
+    const update = async item => {
+        setBusy(item.request_id); setError('');
+        try {
+            const result = await mockService.updateChangeRequest(item.submission_id, item.review_id, item.request_id, { status: 'In Progress', response: responses[item.request_id] || '' });
+            setRequests(current => current.map(row => row.request_id === item.request_id ? { ...row, ...result } : row));
+            setResponses(current => ({ ...current, [item.request_id]: '' }));
+            notify('Response saved to this review request.');
+        } catch (e) { setError(e.message || 'Unable to save your response.'); }
+        finally { setBusy(''); }
+    };
+    const openRevision = item => {
+        const version = Number(item.curriculum_version || 1) + 1;
+        const query = new URLSearchParams({ curriculum_id: item.curriculum_id, version: `${version}.0`, request_id: item.request_id });
+        setLocation(`/designer/create?${query}`);
+    };
+    const statuses = ['Pending Designer Action', 'In Progress', 'Resubmitted', 'Under Re-review', 'Resolved', 'Reopened', 'Closed'];
+    return <div className="content">
+        <PageHeader eyebrow={reviewer ? 'Reviewer / Follow-up' : 'Designer / Next version inputs'} title="Change requests" detail={reviewer ? 'Track whether requested corrections have been addressed in a new submitted version.' : 'Review feedback, record your response, and prepare a corrected version.'} action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        <div className="surface" style={{ display: 'flex', flexWrap: 'wrap', gap: 9, padding: 12, marginBottom: 12 }}><label><span className="label">Curriculum</span><select className="select" value={curriculumFilter} onChange={event => setCurriculumFilter(event.target.value)}><option value="All">All curricula</option>{curriculumOptions.map(([id, name]) => <option key={id} value={id}>{name} ? {id}</option>)}</select></label><label><span className="label">Status</span><select className="select" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option>All</option>{statuses.map(status => <option key={status}>{status}</option>)}</select></label></div>
+        {loading ? <div className="surface" style={{ padding: 22 }}>Loading change requests?</div> : !visible.length ? <div className="surface" style={{ padding: 24 }}><p className="muted" style={{ margin: 0 }}>No requests match these filters.</p></div> : <div style={{ display: 'grid', gap: 11 }}>{visible.map(item => <article className="surface" style={{ padding: 17 }} key={item.request_id}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}><div><span className="eyebrow">{item.decision_type === 'reject' ? 'REJECTION RECORD' : 'REVISION REQUEST'} ? {item.priority} priority</span><h3 className="font-display" style={{ fontSize: 16, margin: '6px 0' }}>{item.curriculum_name}</h3><p className="muted" style={{ fontSize: 10, margin: 0 }}>Curriculum {item.curriculum_id} ? submission v{item.curriculum_version} ? {formatDocumentDate(item.decision_date)}</p></div><StatusBadge status={item.status} /></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginTop: 12 }}><div><span className="eyebrow">Finding</span><p style={{ fontSize: 12 }}>{item.issue}</p></div><div><span className="eyebrow">{item.source === 'Institute Representative' ? 'Institution explanation' : 'Reviewer explanation'}</span><p style={{ fontSize: 12 }}>{item.explanation || item.reviewer_feedback}</p></div><div><span className="eyebrow">Required correction</span><p style={{ fontSize: 12 }}>{item.required_corrective_action}</p></div></div>
+            {item.supporting_evidence?.length > 0 && <details style={{ marginTop: 8 }}><summary className="btn btn-ghost" style={{ width: 'fit-content' }}>View evidence ({item.supporting_evidence.length})</summary><div style={{ display: 'grid', gap: 6, marginTop: 8 }}>{item.supporting_evidence.map((evidence, index) => <p className="surface" style={{ padding: 9, fontSize: 11, margin: 0 }} key={index}>{evidence.excerpt}{evidence.page_number != null ? ` ? Page ${evidence.page_number}` : ''}</p>)}</div></details>}
+            {item.designer_response && <div className="surface" style={{ padding: 10, marginTop: 10 }}><span className="eyebrow">Designer response</span><p style={{ fontSize: 12, marginBottom: 0 }}>{item.designer_response}</p></div>}
+            {item.resubmission_submission_id && <p className="muted" style={{ fontSize: 10 }}>Resubmitted as {item.resubmission_submission_id}</p>}
+            {!reviewer && ['Pending Designer Action', 'In Progress', 'Reopened'].includes(item.status) && <div style={{ marginTop: 12 }}><label className="label" htmlFor={`response-${item.request_id}`}>Your response</label><textarea id={`response-${item.request_id}`} className="textarea" value={responses[item.request_id] ?? item.designer_response ?? ''} onChange={event => setResponses(current => ({ ...current, [item.request_id]: event.target.value }))} placeholder="Describe the correction you are making." /><div style={{ display: 'flex', gap: 8, marginTop: 8 }}><button className="btn btn-primary" disabled={!responses[item.request_id]?.trim() || Boolean(busy)} onClick={() => void update(item)}>{busy === item.request_id ? 'Saving?' : 'Save response / mark in progress'}</button>{item.decision_type !== 'reject' && <button className="btn" onClick={() => openRevision(item)}>Prepare revision</button>}</div></div>}
+        </article>)}</div>}
+    </div>;
 }
 function ImprovementTracker({ notify }) {
-    const [curriculumId, setCurriculumId] = useState(analyzerScoreHistory[0].curriculumId);
-    const item = analyzerScoreHistory.find((record) => record.curriculumId === curriculumId) ?? analyzerScoreHistory[0];
-    const first = item.versions[0];
-    const latest = item.versions[item.versions.length - 1];
-    const improvement = latest.score - first.score;
-    const previous = item.versions[item.versions.length - 2];
-    const recentChange = latest.score - previous.score;
-    return <div className="content"><PageHeader eyebrow="Designer / Continuous improvement" title="Improvement tracker" detail="Compare every analyzed curriculum version and see the score improvement created by completed revisions." action={<button className="btn" onClick={() => notify('Analyzer score history refreshed.')} data-testid="button-refresh-improvement"><RefreshCw size={14} /> Refresh history</button>} /><div className="surface" style={{ padding: 8, display: 'flex', gap: 5, overflowX: 'auto', marginBottom: 15 }}>{analyzerScoreHistory.map((record) => <button key={record.curriculumId} className={`btn ${record.curriculumId === curriculumId ? 'btn-primary' : 'btn-ghost'}`} style={{ whiteSpace: 'nowrap', padding: '0 12px' }} onClick={() => setCurriculumId(record.curriculumId)} data-testid={`tab-improvement-${record.curriculumId}`}>{record.name}</button>)}</div><div className="improvement-summary"><div className="surface improvement-score-card"><span className="eyebrow">Latest analyzer score</span><strong>{latest.score}<small>/100</small></strong><span className="muted">v{latest.version} · {latest.analyzedOn}</span></div><div className="surface improvement-score-card positive"><span className="eyebrow">Total improvement</span><strong>+{improvement}<small> points</small></strong><span className="muted">From v{first.version} ({first.score}) to v{latest.version}</span></div><div className="surface improvement-score-card"><span className="eyebrow">Last version change</span><strong>{recentChange > 0 ? '+' : ''}{recentChange}<small> points</small></strong><span className="muted">Since v{previous.version} ({previous.score})</span></div></div><SectionCard title={`${item.name} — analyzer score history`}><p className="muted" style={{ fontSize: 11, marginTop: -5 }}>Institute: {item.institute}. Each point is recorded from a completed Curriculum Analyzer run.</p><div className="version-score-chart" aria-label="Analyzer score by curriculum version">{item.versions.map((version) => <div className="version-score-column" key={version.version}><div className="version-score-value">{version.score}</div><div className="version-score-bar"><span style={{ height: `${version.score}%` }} /></div><strong>v{version.version}</strong></div>)}</div><div className="table-scroll"><table className="data-table"><thead><tr><th>Version</th><th>Analyzer score</th><th>Change from prior version</th><th>Findings resolved</th><th>Analyzed on</th></tr></thead><tbody>{item.versions.map((version, index) => { const delta = index ? version.score - item.versions[index - 1].score : null; return <tr key={version.version}><td><strong>v{version.version}</strong>{index === item.versions.length - 1 && <span className="badge badge-lavender" style={{ marginLeft: 8 }}>Current</span>}</td><td><strong>{version.score}</strong><span className="muted"> /100</span></td><td>{delta === null ? <span className="muted">Baseline</span> : <span className={delta > 0 ? 'score-gain' : 'muted'}>{delta > 0 ? '+' : ''}{delta} points</span>}</td><td>{version.findingsResolved}</td><td>{version.analyzedOn}</td></tr>; })}</tbody></table></div></SectionCard></div>;
+    const [items, setItems] = useState([]);
+    const [curriculumId, setCurriculumId] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const load = async (announce = false) => {
+        setLoading(true); setError('');
+        try {
+            const rows = await mockService.getImprovementHistory();
+            setItems(rows);
+            setCurriculumId(current => rows.some(row => row.curriculum_id === current) ? current : rows[0]?.curriculum_id || '');
+            if (announce) notify('Improvement history refreshed from saved analyzer reports.');
+        } catch (e) { setError(e.message || 'Unable to load analyzer history.'); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { void load(); }, []);
+    useEffect(() => {
+        const refresh = () => mockService.getImprovementHistory().then(setItems).catch(e => setError(e.message || 'Unable to refresh analyzer history.'));
+        const interval = window.setInterval(refresh, 30000);
+        window.addEventListener('focus', refresh);
+        return () => { window.clearInterval(interval); window.removeEventListener('focus', refresh); };
+    }, []);
+    const item = items.find(row => row.curriculum_id === curriculumId);
+    const versions = item?.versions || [];
+    const latest = versions[versions.length - 1];
+    const previous = versions.length > 1 ? versions[versions.length - 2] : null;
+    const delta = latest?.score != null && previous?.score != null ? Number((latest.score - previous.score).toFixed(2)) : null;
+    const formatScore = score => score == null ? 'Not evaluated' : `${score}`;
+    return <div className="content">
+        <PageHeader eyebrow="Designer / Continuous improvement" title="Improvement tracker" detail="Compare analyzer reports, findings, and reviewer decisions saved for each submitted version." action={<button className="btn" onClick={() => void load(true)} disabled={loading} data-testid="button-refresh-improvement"><RefreshCw size={14} /> Refresh history</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        {loading ? <div className="surface" style={{ padding: 24 }}>Loading saved analyzer history?</div> : !items.length ? <div className="surface" style={{ padding: 28 }} data-testid="improvement-empty"><h2 className="font-display" style={{ fontSize: 17 }}>No analyzed submissions yet</h2><p className="muted" style={{ fontSize: 12 }}>Scores and finding changes will appear after a Reviewer runs the Analyzer on a submitted version.</p></div> : <>
+            <div className="surface" style={{ padding: 9, display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>{items.map(row => <button key={row.curriculum_id} className={`btn ${row.curriculum_id === curriculumId ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setCurriculumId(row.curriculum_id)}>{row.curriculum_name}</button>)}</div>
+            {item && <>
+                <div className="improvement-summary"><div className="surface improvement-score-card"><span className="eyebrow">Latest analyzer score</span><strong>{formatScore(item.latest_score)}{item.latest_score != null && <small>/100</small>}</strong><span className="muted">Version {latest?.version} ? {latest?.analyzed_at ? formatDocumentDate(latest.analyzed_at) : 'Date unavailable'}</span></div><div className="surface improvement-score-card positive"><span className="eyebrow">Total score change</span><strong>{item.total_improvement == null ? 'Not available' : `${item.total_improvement > 0 ? '+' : ''}${item.total_improvement}`}<small>{item.total_improvement == null ? '' : ' points'}</small></strong><span className="muted">Since version {versions[0]?.version}</span></div><div className="surface improvement-score-card"><span className="eyebrow">Last version change</span><strong>{delta == null ? 'Baseline' : `${delta > 0 ? '+' : ''}${delta}`}<small>{delta == null ? '' : ' points'}</small></strong><span className="muted">{previous ? `Since version ${previous.version}` : 'One analyzed version available'}</span></div></div>
+                <div className="stat-grid" style={{ marginTop: 12 }}><StatCard label="Resolved findings" value={item.resolved_findings.length} note="In the latest analyzed version" icon={CheckCircle2} /><StatCard label="Outstanding findings" value={item.latest_findings.length} note="Still open or reopened" icon={CircleAlert} /><StatCard label="New findings" value={item.new_findings.length} note="First seen in latest version" icon={Plus} /><StatCard label="Reopened findings" value={item.reopened_findings.length} note="Returned after earlier resolution" icon={RefreshCw} /></div>
+                <SectionCard title={`${item.curriculum_name} ? analyzed version history`}>
+                    {versions.length > 1 && <div className="version-score-chart" aria-label="Stored analyzer score by submitted version">{versions.map(row => <div className="version-score-column" key={row.submission_id}><div className="version-score-value">{row.score == null ? '?' : row.score}</div><div className="version-score-bar"><span style={{ height: `${Math.max(0, Math.min(100, Number(row.score) || 0))}%` }} /></div><strong>v{row.version}</strong></div>)}</div>}
+                    <div className="table-scroll"><table className="data-table"><thead><tr><th>Version</th><th>Score</th><th>Change</th><th>Resolved</th><th>Remaining</th><th>Analysis date</th><th>Review status</th></tr></thead><tbody>{versions.map((row, index) => { const before = index ? versions[index - 1] : null; const change = before?.score != null && row.score != null ? Number((row.score - before.score).toFixed(2)) : null; const open = (row.finding_snapshot || []).filter(f => ['Open', 'Reopened', 'Newly Detected', 'In Progress'].includes(f.status)).length; const resolved = (row.finding_snapshot || []).filter(f => f.status === 'Resolved').length; return <tr key={row.submission_id}><td><strong>v{row.version}</strong></td><td>{formatScore(row.score)}</td><td>{change == null ? 'Baseline' : `${change > 0 ? '+' : ''}${change}`}</td><td>{resolved}</td><td>{open}</td><td>{formatDocumentDate(row.analyzed_at)}</td><td><StatusBadge status={row.status} /></td></tr>; })}</tbody></table></div>
+                </SectionCard>
+                <div style={{ marginTop: 14 }}><SectionCard title="Reviewer decisions and feedback">{versions.flatMap(row => (row.review_history || []).map(review => ({ ...review, version: row.version, submission_id: row.submission_id }))).length ? <div style={{ display: 'grid', gap: 8 }}>{versions.flatMap(row => (row.review_history || []).map(review => ({ ...review, version: row.version, submission_id: row.submission_id }))).map((review, index) => <div className="surface" style={{ padding: 11 }} key={`${review.submission_id}-${review.review_id || index}`}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong style={{ fontSize: 11 }}>v{review.version} · {review.status}</strong><span className="muted" style={{ fontSize: 10 }}>{formatDocumentDate(review.decided_at)}</span></div><p style={{ fontSize: 11, margin: '6px 0 0' }}>{review.feedback || 'No additional reviewer feedback.'}</p>{review.decision_justification && <p className="muted" style={{ fontSize: 10, margin: '5px 0 0' }}>Decision justification: {review.decision_justification}</p>}</div>)}</div> : <p className="muted" style={{ fontSize: 12 }}>No reviewer decisions are stored for these analyzed versions.</p>}</SectionCard></div>
+                <div style={{ marginTop: 14 }}><SectionCard title="Latest finding status">{item.latest_findings.length || item.resolved_findings.length ? <div style={{ display: 'grid', gap: 8 }}>{[...item.latest_findings, ...item.resolved_findings].map(finding => <div className="surface" style={{ padding: 12 }} key={`${finding.finding_id}-${finding.status}`}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 9 }}><strong style={{ fontSize: 12 }}>{finding.original_issue}</strong><StatusBadge status={finding.status} /></div><p className="muted" style={{ fontSize: 10, marginBottom: 0 }}>Finding {finding.finding_id} ? First seen v{finding.first_detected_version}{finding.resolved_in_version ? ` ? Resolved v${finding.resolved_in_version}` : ''}</p>{finding.resolution_evidence?.map((evidence, index) => <p key={index} style={{ fontSize: 11, marginBottom: 0 }}>{evidence.excerpt}</p>)}</div>)}</div> : <p className="muted" style={{ fontSize: 12 }}>No failed or partial checks were recorded in the latest report.</p>}</SectionCard></div>
+            </>}
+        </>}
+    </div>;
 }
-function PublishedPage() { return <div className="content"><PageHeader eyebrow="Designer / Public record" title="Published curricula" detail="Versions currently visible to their explicitly selected institutes." /><SectionCard title="Published catalogue"><CurriculumTable items={mockCurricula.filter((item) => item.status === 'Published' || item.status === 'Approved')} onAction={() => undefined} /></SectionCard></div>; }
-function InstituteCurricula() {
-    const published = mockCurricula.filter((item) => item.status === 'Published');
-    return <div className="content"><PageHeader eyebrow="Institute / Published access" title="Available curricula" detail="Only curricula explicitly published to Northstar Institute of Technology appear here." /><div style={{ display: 'grid', gap: 12 }}>{published.map((item) => <div className="surface" style={{ padding: 19 }} key={item.id}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 }}><div><span className="eyebrow">Published · 2026–27</span><h2 className="font-display" style={{ fontSize: 17, margin: '7px 0' }}>{item.name}</h2><p className="muted" style={{ fontSize: 11, margin: 0 }}>{item.program} · Version {item.version} · 8 semesters · 162 credits</p></div><StatusBadge status="Published" /></div><div style={{ display: 'flex', gap: 8, marginTop: 15 }}><button className="btn" data-testid={`button-view-published-${item.id}`}><Eye size={14} /> View curriculum</button><button className="btn" data-testid={`button-view-version-${item.id}`}><History size={14} /> Version history</button></div></div>)}</div></div>;
+function PublishedPage() { return <PublishedCurriculaPage audience="Designer" />; }
+function InstituteCurricula() { return <PublishedCurriculaPage audience="Institute" />; }
+function PublishedCurriculaPage({ audience }) {
+    const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [expanded, setExpanded] = useState('');
+    const [, setLocation] = useLocation();
+    const load = async () => { setLoading(true); setError(''); try { setItems(await mockService.getPublishedCurricula()); } catch (e) { setError(e.message || 'Unable to load published curricula.'); } finally { setLoading(false); } };
+    useEffect(() => { void load(); }, []);
+    const openPdf = async item => { try { const url = await mockService.getSubmissionDocument(item.submission_id); window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) { setError(e.message || 'Unable to open the published PDF.'); } };
+    return <div className="content"><PageHeader eyebrow={`${audience} / Published curricula`} title={audience === 'Institute' ? 'Available curricula' : 'Published curricula'} detail="Only versions explicitly published by the Institute Representative appear here." action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />{error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}{loading ? <div className="surface" style={{ padding: 22 }}>Loading published curricula…</div> : !items.length ? <div className="surface" style={{ padding: 24 }}><p className="muted" style={{ margin: 0 }}>No curricula have been published to this workspace.</p></div> : <div style={{ display: 'grid', gap: 10 }}>{items.map(item => <article className="surface" style={{ padding: 17 }} key={item.submission_id}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><div><h2 className="font-display" style={{ fontSize: 16, margin: '0 0 6px' }}>{item.curriculum_name}</h2><p className="muted" style={{ fontSize: 11, margin: 0 }}>Version {item.version} · Published {formatDocumentDate(item.published_at)}</p></div><StatusBadge status="Published" /></div><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn" onClick={() => void openPdf(item)}><Eye size={14} /> View PDF</button><button className="btn" onClick={() => setExpanded(expanded === item.curriculum_id ? '' : item.curriculum_id)}><History size={14} /> {expanded === item.curriculum_id ? 'Hide history' : 'Version history'}</button>{audience === 'Institute' && <button className="btn" onClick={() => setLocation('/institute/courses')}>View courses</button>}</div>{expanded === item.curriculum_id && <div className="surface" style={{ padding: 10, marginTop: 10 }}><strong style={{ fontSize: 11 }}>Published versions</strong><p className="muted" style={{ fontSize: 10, margin: '5px 0 0' }}>{items.filter(version => version.curriculum_id === item.curriculum_id).map(version => `v${version.version} · ${formatDocumentDate(version.published_at)}`).join(' | ')}</p></div>}</article>)}</div>}</div>;
 }
 function InstituteCourses() {
-    const courses = [['Data Structures', 'CSE201', 'B.Tech CSE · v1.4', 'Dr. Kavya Menon'], ['Database Management Systems', 'CS204', 'B.Tech CSE · v1.4', 'Unassigned'], ['Machine Learning', 'AI201', 'B.Tech AI · v2.0', 'Prof. Nikhil Shah'], ['Deep Learning', 'AI202', 'B.Tech AI · v2.0', 'Unassigned']];
-    return <div className="content"><PageHeader eyebrow="Institute / Delivery" title="My courses" detail="Course workspaces inherit the published curriculum version and its outcomes." /><SectionCard title="Assigned and available course workspaces"><table className="data-table"><thead><tr><th>Course</th><th>Code</th><th>Curriculum</th><th>Coordinator</th><th>Action</th></tr></thead><tbody>{courses.map((course, i) => <tr key={course[1]}><td><strong>{course[0]}</strong></td><td>{course[1]}</td><td>{course[2]}</td><td>{course[3] === 'Unassigned' ? <span className="badge badge-amber">Unassigned</span> : course[3]}</td><td><button className="btn" data-testid={`button-open-course-${i}`}><Eye size={14} /> Open</button></td></tr>)}</tbody></table></SectionCard></div>;
+    const [items, setItems] = useState([]);
+    const [structures, setStructures] = useState({});
+    const [expanded, setExpanded] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [loadingId, setLoadingId] = useState('');
+    const [error, setError] = useState('');
+    const load = async () => {
+        setLoading(true); setError('');
+        try { setItems(await mockService.getPublishedCurricula()); }
+        catch (e) { setError(e.message || 'Unable to load published curriculum outlines.'); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { void load(); }, []);
+    const showCourses = async item => {
+        if (expanded === item.submission_id) { setExpanded(''); return; }
+        setExpanded(item.submission_id);
+        if (structures[item.submission_id]) return;
+        setLoadingId(item.submission_id); setError('');
+        try {
+            const structure = await mockService.getPublishedCurriculumStructure(item.submission_id);
+            setStructures(current => ({ ...current, [item.submission_id]: structure }));
+        } catch (e) { setError(e.message || 'Unable to extract courses from this published PDF.'); }
+        finally { setLoadingId(''); }
+    };
+    const openPdf = async item => {
+        try { const url = await mockService.getSubmissionDocument(item.submission_id); window.open(url, '_blank', 'noopener,noreferrer'); }
+        catch (e) { setError(e.message || 'Unable to open the published curriculum PDF.'); }
+    };
+    return <div className="content"><PageHeader eyebrow="Institute / Published courses" title="My courses" detail="Course outlines are extracted from curricula published to your institution." action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        {loading ? <div className="surface" style={{ padding: 20 }}>Loading published curricula?</div> : !items.length ? <div className="surface" style={{ padding: 24 }}><p className="muted" style={{ margin: 0 }}>No published curriculum is available to this institution yet.</p></div> : <div style={{ display: 'grid', gap: 10 }}>{items.map(item => {
+            const structure = structures[item.submission_id];
+            const courses = [...(structure?.courses || []), ...(structure?.professional_electives || []), ...(structure?.open_electives || []), ...(structure?.projects || []), ...(structure?.internships || []), ...(structure?.mandatory_courses || [])];
+            return <article className="surface" style={{ padding: 16 }} key={item.submission_id}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><div><h2 className="font-display" style={{ fontSize: 15, margin: '0 0 5px' }}>{item.curriculum_name}</h2><span className="muted" style={{ fontSize: 11 }}>Version {item.version} ? Published {formatDocumentDate(item.published_at)}</span></div><StatusBadge status="Published" /></div><div style={{ display: 'flex', gap: 8, marginTop: 11 }}><button className="btn" onClick={() => void openPdf(item)}><Eye size={14} /> Open PDF</button><button className="btn" onClick={() => void showCourses(item)} disabled={loadingId === item.submission_id}><BookOpen size={14} /> {loadingId === item.submission_id ? 'Extracting?' : expanded === item.submission_id ? 'Hide course outline' : 'View course outline'}</button></div>{expanded === item.submission_id && <div className="surface" style={{ padding: 11, marginTop: 10 }}>{loadingId === item.submission_id ? <p className="muted">Extracting course details from this version?</p> : structure && (courses.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>Course</th><th>Code</th><th>Semester</th><th>Category</th><th>Credits</th></tr></thead><tbody>{courses.map((course, index) => <tr key={`${course.course_code || course.course_title}-${index}`}><td>{course.course_title}</td><td>{course.course_code || '?'}</td><td>{course.semester || '?'}</td><td>{course.category || '?'}</td><td>{course.credits ?? '?'}</td></tr>)}</tbody></table></div> : <p className="muted" style={{ margin: 0 }}>No courses could be extracted from this PDF version. Open the original to review its contents.</p>)}</div>}</article>;
+        })}</div>}
+    </div>;
 }
-function Coordinators({ notify }) {
-    const [course, setCourse] = useState('Database Management Systems');
-    const [coordinator, setCoordinator] = useState('');
-    const [assigned, setAssigned] = useState(false);
-    return <div className="content"><PageHeader eyebrow="Institute / Delivery ownership" title="Course coordinators" detail="One active coordinator per institute + course + curriculum version. This demo enforces the rule before saving." /><div style={{ display: 'grid', gridTemplateColumns: '.95fr 1.05fr', gap: 16 }}><SectionCard title="Assign coordinator"><label className="label">Course and version</label><select className="select" value={course} onChange={(e) => setCourse(e.target.value)} data-testid="select-coordinator-course"><option>Database Management Systems · CSE204 · v1.4</option><option>Data Structures · CSE201 · v1.4</option><option>Machine Learning · AI201 · v2.0</option></select><label className="label" style={{ marginTop: 15 }}>Coordinator</label><select className="select" value={coordinator} onChange={(e) => setCoordinator(e.target.value)} data-testid="select-coordinator-person"><option value="">Select a faculty member</option><option>Dr. Kavya Menon</option><option>Prof. Nikhil Shah</option><option>Dr. Leena Thomas</option></select><button className="btn btn-primary" style={{ width: '100%', marginTop: 19 }} disabled={!coordinator} onClick={() => { setAssigned(true); notify('Coordinator assignment saved as the single active owner.'); }} data-testid="button-assign-coordinator"><UserCog size={15} /> {assigned ? 'Change coordinator' : 'Assign coordinator'}</button><div style={{ background: '#f8f0e9', border: '1px solid #ecd8ca', borderRadius: '.85rem', padding: 12, marginTop: 16, fontSize: 11, lineHeight: 1.55 }}><strong>Assignment rule</strong><br />An active assignment is unique for this institute, course and published curriculum version.</div></SectionCard><SectionCard title="Assignment history"><div style={{ display: 'grid', gap: 10 }}>{[['Dr. Kavya Menon', 'Data Structures · v1.4', 'Active', '04 Mar 2026'], ['Prof. Nikhil Shah', 'Machine Learning · v2.0', 'Active', '28 Feb 2026'], ['S. Banerjee', 'DBMS · v1.2', 'Ended', '14 Nov 2025']].map((row) => <div className="surface" style={{ padding: 14 }} key={row[1]}><div style={{ display: 'flex', justifyContent: 'space-between' }}><strong style={{ fontSize: 12 }}>{row[0]}</strong><StatusBadge status={row[2]} /></div><p className="muted" style={{ margin: '5px 0 0', fontSize: 11 }}>{row[1]} · {row[3]}</p></div>)}</div></SectionCard></div></div>;
+function Coordinators() {
+    const [profile, setProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    useEffect(() => {
+        mockService.getAccountProfile().then(setProfile).catch(e => setError(e.message || 'Unable to load institution details.')).finally(() => setLoading(false));
+    }, []);
+    return <div className="content"><PageHeader eyebrow="Institute / Delivery ownership" title="Course coordinators" detail="Coordinator assignments are not configured in this workspace." />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        {loading ? <div className="surface" style={{ padding: 20 }}>Loading institution details?</div> : <SectionCard title="Coordinator directory"><p className="muted" style={{ fontSize: 12, margin: 0 }}>No faculty directory or coordinator assignment records are available for {profile?.institute_name || 'this institution'}. No names or assignments are shown until they are provided through a supported account workflow.</p></SectionCard>}
+    </div>;
 }
 function ChangeRequests({ notify }) {
-    const [sent, setSent] = useState(false);
-    const [status, setStatus] = useState('Submitted');
-    return <div className="content"><PageHeader eyebrow="Institute / Curriculum feedback loop" title="Change requests" detail="A structured request enters designer review and never edits a published curriculum directly." action={<span className="badge badge-lavender">Northstar Institute</span>} /><div style={{ display: 'grid', gridTemplateColumns: '1fr .8fr', gap: 16 }}><SectionCard title="Request a curriculum change">{sent ? <div style={{ textAlign: 'center', padding: 20 }}><CheckCircle2 size={32} color="#50865d" /><h3 className="font-display" style={{ fontSize: 18, margin: '10px 0' }}>Request submitted</h3><p className="muted" style={{ fontSize: 12 }}>CR-1031 is now visible to the curriculum designer.</p></div> : <form onSubmit={(e) => { e.preventDefault(); setSent(true); notify('Change request CR-1031 submitted.'); }}><label className="label">Course</label><select className="select" data-testid="select-change-course"><option>Data Structures</option><option>Database Management Systems</option><option>Machine Learning</option></select><label className="label" style={{ marginTop: 13 }}>Current issue</label><input className="field" required placeholder="Describe the gap you observed" data-testid="input-change-issue" /><label className="label" style={{ marginTop: 13 }}>Suggested change</label><input className="field" required placeholder="What should be added or adjusted?" data-testid="input-change-suggestion" /><label className="label" style={{ marginTop: 13 }}>Reason / evidence</label><textarea className="textarea" required placeholder="Connect this request to student or delivery evidence." data-testid="textarea-change-reason" /><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 13 }}><div><label className="label">Priority</label><select className="select"><option>High</option><option>Medium</option><option>Low</option></select></div><div><label className="label">Academic year</label><select className="select"><option>2027–28</option><option>2028–29</option></select></div></div><button className="btn btn-primary" style={{ width: '100%', marginTop: 18 }} data-testid="button-submit-change-request"><Send size={14} /> Submit change request</button></form>}</SectionCard><SectionCard title="Request status"><div style={{ display: 'grid', gap: 0 }}>{['Submitted', 'Under Designer Review', 'Accepted / Rejected'].map((item, i) => <div key={item} style={{ display: 'flex', gap: 12, minHeight: 68, position: 'relative' }}><div style={{ width: 24, height: 24, borderRadius: '50%', display: 'grid', placeItems: 'center', background: i === 0 || (i === 1 && status !== 'Submitted') ? '#dfd2f2' : '#eeeaf0', color: '#694a98', zIndex: 1 }}><Check size={13} /></div>{i < 2 && <div style={{ width: 1, background: '#ded5e6', position: 'absolute', left: 12, top: 24, bottom: 0 }} />}<div><strong style={{ display: 'block', fontSize: 12 }}>{item}</strong><span className="muted" style={{ fontSize: 10 }}>{i === 0 ? 'CR-1031 · just now' : i === 1 ? 'Awaiting designer response' : 'Decision will be recorded here'}</span></div></div>)}</div><button className="btn" onClick={() => { setStatus('Under Review'); notify('Demo status progressed to Under Designer Review.'); }} data-testid="button-progress-change-status"><RefreshCw size={14} /> Progress demo status</button></SectionCard></div></div>;
+    const [curricula, setCurricula] = useState([]);
+    const [submissionId, setSubmissionId] = useState('');
+    const [category, setCategory] = useState('Course coverage');
+    const [observation, setObservation] = useState('');
+    const [suggestion, setSuggestion] = useState('');
+    const [priority, setPriority] = useState('Medium');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const load = async () => {
+        setLoading(true); setError('');
+        try {
+            const rows = await mockService.getPublishedCurricula();
+            setCurricula(rows);
+            setSubmissionId(current => rows.some(row => row.submission_id === current) ? current : rows[0]?.submission_id || '');
+        } catch (e) { setError(e.message || 'Unable to load published curricula.'); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { void load(); }, []);
+    const requests = curricula.flatMap(item => (item.institution_feedback || []).filter(row => row.kind === 'change_request').map(row => ({ ...row, ...item })));
+    const submit = async event => {
+        event.preventDefault(); setSaving(true); setError('');
+        try {
+            await mockService.submitInstituteFeedback(submissionId, { kind: 'change_request', category, observation, suggested_change: suggestion, priority });
+            setObservation(''); setSuggestion(''); await load(); notify('Change request saved for the Designer.');
+        } catch (e) { setError(e.message || 'Unable to save this change request.'); }
+        finally { setSaving(false); }
+    };
+    return <div className="content"><PageHeader eyebrow="Institute / Curriculum feedback loop" title="Change requests" detail="Send evidence-based requests for a published version. The Designer sees them in the matching curriculum." action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        {loading ? <div className="surface" style={{ padding: 20 }}>Loading published curricula...</div> : <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <SectionCard title="Request a curriculum change">{curricula.length ? <form onSubmit={submit}>
+                <label className="label" htmlFor="change-curriculum">Published curriculum</label><select id="change-curriculum" className="select" required value={submissionId} onChange={e => setSubmissionId(e.target.value)}>{curricula.map(item => <option key={item.submission_id} value={item.submission_id}>{item.curriculum_name} ? v{item.version}</option>)}</select>
+                <label className="label" style={{ marginTop: 12 }}>Category</label><select className="select" value={category} onChange={e => setCategory(e.target.value)}><option>Course coverage</option><option>Assessment design</option><option>Learning outcomes</option><option>Practical resources</option><option>Other</option></select>
+                <label className="label" style={{ marginTop: 12 }}>Observation and evidence</label><textarea className="textarea" required value={observation} onChange={e => setObservation(e.target.value)} placeholder="Describe what should change and why." />
+                <label className="label" style={{ marginTop: 12 }}>Suggested change</label><textarea className="textarea" required value={suggestion} onChange={e => setSuggestion(e.target.value)} placeholder="Describe a practical correction." />
+                <label className="label" style={{ marginTop: 12 }}>Priority</label><select className="select" value={priority} onChange={e => setPriority(e.target.value)}><option>High</option><option>Medium</option><option>Low</option></select>
+                <button className="btn btn-primary" style={{ width: '100%', marginTop: 15 }} disabled={saving || !submissionId}><Send size={14} /> {saving ? 'Saving...' : 'Submit change request'}</button>
+            </form> : <p className="muted" style={{ fontSize: 12 }}>Publish an accepted curriculum before submitting an institutional change request.</p>}</SectionCard>
+            <SectionCard title="Submitted requests">{requests.length ? <div style={{ display: 'grid', gap: 8 }}>{requests.map(item => <div className="surface" style={{ padding: 11 }} key={item.feedback_id}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong style={{ fontSize: 12 }}>{item.curriculum_name} ? v{item.version}</strong><StatusBadge status={item.status} /></div><p style={{ fontSize: 11 }}>{item.observation}</p><p className="muted" style={{ fontSize: 10, marginBottom: 0 }}>Suggested change: {item.suggested_change}</p></div>)}</div> : <p className="muted" style={{ fontSize: 12 }}>No institutional change requests have been submitted.</p>}</SectionCard>
+        </div>}
+    </div>;
 }
 function Feedback({ notify }) {
-    return <div className="content"><PageHeader eyebrow="Institute / Voice of delivery" title="Feedback" detail="Capture what students and faculty encounter in the published curriculum." /><div style={{ maxWidth: 720 }}><SectionCard title="Share delivery feedback"><label className="label">Curriculum</label><select className="select"><option>B.Tech CSE · v1.4</option><option>B.Tech AI · v2.0</option></select><label className="label" style={{ marginTop: 14 }}>Feedback category</label><select className="select"><option>Course coverage</option><option>Assessment design</option><option>Resources</option><option>Learning outcomes</option></select><label className="label" style={{ marginTop: 14 }}>Your observation</label><textarea className="textarea" placeholder="Be specific so the designer can act on the evidence." data-testid="textarea-feedback" /><button className="btn btn-primary" style={{ marginTop: 17 }} onClick={() => notify('Feedback shared with the curriculum team.')} data-testid="button-submit-feedback"><Send size={14} /> Share feedback</button></SectionCard></div></div>;
+    const [curricula, setCurricula] = useState([]);
+    const [submissionId, setSubmissionId] = useState('');
+    const [category, setCategory] = useState('Course coverage');
+    const [observation, setObservation] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const load = async () => {
+        setLoading(true); setError('');
+        try {
+            const rows = await mockService.getPublishedCurricula();
+            setCurricula(rows);
+            setSubmissionId(current => rows.some(row => row.submission_id === current) ? current : rows[0]?.submission_id || '');
+        } catch (e) { setError(e.message || 'Unable to load published curricula.'); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { void load(); }, []);
+    const feedback = curricula.flatMap(item => (item.institution_feedback || []).filter(row => row.kind === 'feedback').map(row => ({ ...row, ...item })));
+    const submit = async event => {
+        event.preventDefault(); setSaving(true); setError('');
+        try {
+            await mockService.submitInstituteFeedback(submissionId, { kind: 'feedback', category, observation });
+            setObservation(''); await load(); notify('Feedback saved for this published curriculum.');
+        } catch (e) { setError(e.message || 'Unable to save feedback.'); }
+        finally { setSaving(false); }
+    };
+    return <div className="content"><PageHeader eyebrow="Institute / Delivery feedback" title="Feedback" detail="Share delivery observations with the Designer of a published curriculum." action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        {loading ? <div className="surface" style={{ padding: 20 }}>Loading published curricula...</div> : <div style={{ maxWidth: 760 }}>
+            <SectionCard title="Share delivery feedback">{curricula.length ? <form onSubmit={submit}>
+                <label className="label" htmlFor="feedback-curriculum">Curriculum</label><select id="feedback-curriculum" className="select" required value={submissionId} onChange={e => setSubmissionId(e.target.value)}>{curricula.map(item => <option key={item.submission_id} value={item.submission_id}>{item.curriculum_name} ? v{item.version}</option>)}</select>
+                <label className="label" style={{ marginTop: 12 }}>Feedback category</label><select className="select" value={category} onChange={e => setCategory(e.target.value)}><option>Course coverage</option><option>Assessment design</option><option>Resources</option><option>Learning outcomes</option><option>Other</option></select>
+                <label className="label" style={{ marginTop: 12 }}>Your observation</label><textarea className="textarea" required value={observation} onChange={e => setObservation(e.target.value)} placeholder="Describe the delivery experience and supporting evidence." />
+                <button className="btn btn-primary" style={{ marginTop: 15 }} disabled={saving || !submissionId}><Send size={14} /> {saving ? 'Saving...' : 'Share feedback'}</button>
+            </form> : <p className="muted" style={{ fontSize: 12 }}>Feedback is available after a curriculum has been published.</p>}</SectionCard>
+            <div style={{ marginTop: 14 }}><SectionCard title="Recent feedback">{feedback.length ? <div style={{ display: 'grid', gap: 8 }}>{feedback.map(item => <div className="surface" style={{ padding: 11 }} key={item.feedback_id}><strong style={{ fontSize: 12 }}>{item.curriculum_name} ? v{item.version} ? {item.category}</strong><p style={{ fontSize: 11, marginBottom: 0 }}>{item.observation}</p><span className="muted" style={{ fontSize: 10 }}>{formatDocumentDate(item.created_at)}</span></div>)}</div> : <p className="muted" style={{ fontSize: 12 }}>No delivery feedback recorded yet.</p>}</SectionCard></div>
+        </div>}
+    </div>;
 }
 function Notifications({ notify }) {
-    const [items, setItems] = useState([['New curriculum submitted', 'B.Tech Artificial Intelligence v2.1 is ready for the reviewer queue.', '14 min ago', true], ['Screening completed', 'AI screening report is available with 3 findings.', 'Yesterday', true], ['Reviewer requested changes', 'Assessment balance needs another pass.', '02 Mar 2026', false], ['New AI recommendation available', 'MLOps coverage has been flagged in comparison.', '28 Feb 2026', false]]);
-    return <div className="content"><PageHeader eyebrow="Workspace / Notifications" title="Notification center" detail="Workflow events, evidence updates and decisions that need your attention." action={<button className="btn" onClick={() => { setItems(items.map((item) => [item[0], item[1], item[2], false])); notify('All notifications marked as read.'); }} data-testid="button-mark-all-read"><Check size={14} /> Mark all read</button>} /><div style={{ display: 'grid', gap: 9 }}>{items.map((item, i) => <button key={item[0]} className="surface" style={{ textAlign: 'left', padding: 16, display: 'flex', gap: 13, alignItems: 'flex-start', borderLeft: item[3] ? '3px solid #9070bf' : undefined }} onClick={() => notify('Notification marked as read and opened.')} data-testid={`button-notification-${i}`}><span className="brand-mark" style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0 }}><Bell size={14} /></span><span style={{ flex: 1 }}><strong style={{ display: 'block', fontSize: 12 }}>{item[0]}</strong><span className="muted" style={{ display: 'block', fontSize: 11, marginTop: 5 }}>{item[1]}</span><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 9 }}>{item[2]}</span></span>{item[3] && <span className="badge badge-lavender">New</span>}</button>)}</div></div>;
+    const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [, setLocation] = useLocation();
+    const load = () => mockService.getNotifications().then(setItems).catch(e => setError(e.message || 'Unable to load notifications.')).finally(() => setLoading(false));
+    useEffect(() => { void load(); }, []);
+    const markAllRead = async () => {
+        try { await mockService.markAllNotificationsRead(); await load(); notify('Notifications marked as read.'); }
+        catch (e) { setError(e.message || 'Unable to update notifications.'); }
+    };
+    const open = async item => {
+        try {
+            if (!item.read) await mockService.markNotificationRead(item.notification_id);
+            await load();
+            const role = roleFromPath(window.location.pathname);
+            setLocation(role === 'reviewer' ? '/reviewer/reviews' : role === 'designer' ? '/designer/curricula' : role === 'institute' ? '/institute/submit' : '/admin/reviews');
+        } catch (e) { setError(e.message || 'Unable to open this notification.'); }
+    };
+    return <div className="content"><PageHeader eyebrow="Workspace" title="Notifications" action={<button className="btn" onClick={() => void markAllRead()} disabled={loading || !items.some(item => !item.read)} data-testid="button-mark-all-read"><Check size={14} /> Mark all read</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 10 }}>{error} <button className="btn" onClick={() => { setLoading(true); void load(); }}>Retry</button></div>}
+        {loading ? <div className="surface" style={{ padding: 20 }}>Loading notifications…</div> : items.length === 0 ? <div className="surface" style={{ padding: 24 }}><p className="muted" style={{ margin: 0 }}>No workflow notifications yet.</p></div> : <div style={{ display: 'grid', gap: 9 }}>{items.map(item => <button key={item.notification_id} className="surface" style={{ textAlign: 'left', padding: 16, display: 'flex', gap: 13, alignItems: 'flex-start', borderLeft: !item.read ? '3px solid #9070bf' : undefined }} onClick={() => void open(item)}><span className="brand-mark" style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0 }}><Bell size={14} /></span><span style={{ flex: 1 }}><strong style={{ display: 'block', fontSize: 12 }}>{item.title}</strong><span className="muted" style={{ display: 'block', fontSize: 11, marginTop: 5 }}>{item.message}</span><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 9 }}>{formatDocumentDate(item.created_at)}</span></span>{!item.read && <span className="badge badge-lavender">New</span>}</button>)}</div>}
+    </div>;
 }
 function SettingsPage({ notify }) {
-    return <div className="content"><PageHeader eyebrow="Workspace / Preferences" title="Settings" detail="Keep your role workspace precise, quiet and easy to audit." /><div style={{ maxWidth: 760, display: 'grid', gap: 14 }}><SectionCard title="Profile"><div className="form-grid"><Field label="Name" value="Ananya Iyer" /><Field label="Organization" value="Curriculum Design Cell" /><Field label="Work email" value="ananya.iyer@curriculum.lab" /><Field label="Time zone" value="Asia / Kolkata" /></div><button className="btn btn-primary" style={{ marginTop: 18 }} onClick={() => notify('Profile preferences saved.')} data-testid="button-save-profile"><Save size={14} /> Save profile</button></SectionCard><SectionCard title="Workspace preferences"><label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', fontSize: 12, borderBottom: '1px solid hsl(var(--border))' }}><span><strong style={{ display: 'block' }}>Evidence reminders</strong><span className="muted" style={{ fontSize: 10 }}>Notify me when a source is missing or outdated.</span></span><input type="checkbox" defaultChecked /></label><label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', fontSize: 12 }}><span><strong style={{ display: 'block' }}>Decision digest</strong><span className="muted" style={{ fontSize: 10 }}>A daily summary of workflow changes.</span></span><input type="checkbox" defaultChecked /></label></SectionCard></div></div>;
+    const [profile, setProfile] = useState(null);
+    const [timezone, setTimezone] = useState('Asia/Kolkata');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const load = async () => {
+        setLoading(true); setError('');
+        try {
+            const result = await mockService.getAccountProfile();
+            setProfile(result);
+            const zone = result.preferences?.timezone || 'Asia/Kolkata';
+            setTimezone(zone); localStorage.setItem('aicte-timezone', zone);
+        } catch (e) { setError(e.message || 'Unable to load account settings.'); }
+        finally { setLoading(false); }
+    };
+    useEffect(() => { void load(); }, []);
+    const save = async () => {
+        setSaving(true); setError('');
+        try {
+            const result = await mockService.updateAccountPreferences({ timezone });
+            setProfile(result);
+            const zone = result.preferences?.timezone || timezone;
+            setTimezone(zone); localStorage.setItem('aicte-timezone', zone);
+            notify('Time zone preference saved.');
+        } catch (e) { setError(e.message || 'Unable to save the time zone.'); }
+        finally { setSaving(false); }
+    };
+    return <div className="content"><PageHeader eyebrow="Workspace / Preferences" title="Settings" action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />
+        {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}
+        {loading ? <div className="surface" style={{ padding: 20 }}>Loading account settings?</div> : profile && <div style={{ maxWidth: 760, display: 'grid', gap: 14 }}>
+            <SectionCard title="Account"><div className="form-grid"><div><span className="label">Name</span><p>{profile.name}</p></div><div><span className="label">Email</span><p>{profile.email}</p></div><div><span className="label">Role</span><p>{profile.role}</p></div><div><span className="label">Institution</span><p>{profile.institute_name || 'Not linked'}</p></div></div></SectionCard>
+            <SectionCard title="Workspace preferences"><label className="label" htmlFor="settings-timezone">Time zone</label><select id="settings-timezone" className="select" value={timezone} onChange={event => setTimezone(event.target.value)}><option value="Asia/Kolkata">Asia/Kolkata</option><option value="UTC">UTC</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option></select><p className="muted" style={{ fontSize: 11 }}>Dates throughout the workspace use this time zone.</p><button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => void save()} disabled={saving}><Save size={14} /> {saving ? 'Saving?' : 'Save time zone'}</button></SectionCard>
+        </div>}
+    </div>;
 }
 function Modal({ title, onClose, children, wide = false }) {
     return <div style={{ position: 'fixed', inset: 0, zIndex: 45, background: 'rgba(43,28,59,.35)', display: 'grid', placeItems: 'center', padding: 18 }}><div className="surface" style={{ width: wide ? 'min(900px, 100%)' : 'min(520px, 100%)', maxHeight: '90dvh', overflowY: 'auto', padding: 23 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}><h2 className="font-display" style={{ fontSize: 19, margin: 0 }}>{title}</h2><button className="btn icon-btn" onClick={onClose} data-testid="button-close-modal"><X size={16} /></button></div>{children}</div></div>;

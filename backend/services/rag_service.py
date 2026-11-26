@@ -101,6 +101,7 @@ def process_and_store_pdf(
         filename,
         source_type=source_type,
         owner_id=owner_id,
+        document_id=document_id,
     )
     if existing_chunks is not None:
         return existing_chunks, True

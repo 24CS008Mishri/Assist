@@ -548,7 +548,7 @@ Unrelated page-header content""",
     def test_analyzer_endpoint_returns_result_and_maps_not_found(self):
         client = TestClient(main.app)
         main.app.dependency_overrides[require_authenticated_user] = lambda: (
-            AuthenticatedUser(user_id="designer-a", role="designer")
+            AuthenticatedUser(user_id="reviewer-a", role="reviewer")
         )
         structured = StructuredCurriculum(
             curriculum_id="xyz-cse-2026",
@@ -560,16 +560,22 @@ Unrelated page-header content""",
             with patch(
                 "backend.routers.analyzer.extract_structured_curriculum",
                 return_value=structured,
+            ), patch(
+                "backend.routers.analyzer.find_submission",
+                return_value={"submission_id": "sub-1", "status": "Pending", "curriculum_id": "xyz-cse-2026", "document_id": "doc_xyz", "designer_id": "designer-a"},
             ):
-                response = client.post("/api/analyzer/extract/xyz-cse-2026")
+                response = client.post("/api/analyzer/extract/xyz-cse-2026?document_id=doc_xyz&submission_id=sub-1")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["curriculum_id"], "xyz-cse-2026")
 
             with patch(
                 "backend.routers.analyzer.extract_structured_curriculum",
                 side_effect=CurriculumNotFoundError("not found"),
+            ), patch(
+                "backend.routers.analyzer.find_submission",
+                return_value={"submission_id": "sub-1", "status": "Pending", "curriculum_id": "missing", "document_id": "doc_xyz", "designer_id": "designer-a"},
             ):
-                missing = client.post("/api/analyzer/extract/missing")
+                missing = client.post("/api/analyzer/extract/missing?submission_id=sub-1")
             self.assertEqual(missing.status_code, 404)
             self.assertEqual(missing.json(), {"detail": "not found"})
         finally:

@@ -18,7 +18,7 @@ from backend.services.aicte_evidence_service import enrich_score_with_aicte_evid
 from backend.services.scoring_service import score_structured_curriculum
 
 
-_DESIGNER = AuthenticatedUser(user_id="designer-a", role="designer")
+_DESIGNER = AuthenticatedUser(user_id="reviewer-a", role="reviewer")
 
 
 def _evidence(excerpt: str = "Extracted curriculum row") -> EvidenceReference:
@@ -71,6 +71,19 @@ class FakeAicteCollection:
 
 
 class ScoringServiceTests(unittest.TestCase):
+    def setUp(self):
+        self.submission_lookup = patch(
+            "backend.routers.analyzer.find_submission",
+            side_effect=lambda key: {
+                "submission_id": key,
+                "status": "Pending",
+                "curriculum_id": key.split("::", 1)[0],
+                "document_id": key.split("::", 1)[1],
+                "designer_id": "designer-a",
+            },
+        )
+        self.submission_lookup.start()
+        self.addCleanup(self.submission_lookup.stop)
     def test_detects_partial_and_full_curriculum_scope(self):
         partial = score_structured_curriculum(
             _curriculum(
@@ -602,6 +615,7 @@ class ScoringServiceTests(unittest.TestCase):
         response = score_curriculum_endpoint(
             "xyz-cse-2026",
             document_id="doc-1",
+            submission_id="xyz-cse-2026::doc-1",
             current_user=_DESIGNER,
         )
         extract_mock.assert_called_once_with(

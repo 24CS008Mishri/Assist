@@ -43,6 +43,11 @@ def get_designer_database() -> Database:
     return get_designer_client()[get_settings().curriculum_mongodb_db_name]
 
 
+def get_workflow_database() -> Database:
+    """Workflow records share the existing Designer MongoDB deployment."""
+    return get_designer_database()
+
+
 def get_aicte_database() -> Database:
     return get_aicte_client()[get_settings().aicte_mongodb_db_name]
 

@@ -54,11 +54,13 @@ def is_document_indexed(
     *,
     source_type: str = AICTE_REFERENCE,
     owner_id: Optional[str] = None,
+    document_id: Optional[str] = None,
 ) -> Optional[int]:
     _, metadata_collection = _collections(source_type)
     existing_doc = metadata_collection.find_one(
         {
             "filename": filename,
+            **({"document_id": document_id} if document_id else {}),
             **_ownership_query(
                 source_type,
                 owner_id,
@@ -83,6 +85,7 @@ def register_document(
     year: Optional[int] = None,
     version: Optional[str] = None,
     owner_id: Optional[str] = None,
+    original_file_id: Optional[str] = None,
 ) -> None:
     _, metadata_collection = _collections(source_type)
     ownership = _ownership_query(source_type, owner_id)
@@ -97,11 +100,14 @@ def register_document(
         "version": version,
         "total_chunks": total_chunks,
         "status": "Active",
+        **({"handoff_status": "Draft"} if source_type == SUBMITTED_CURRICULUM else {}),
         "uploaded_at": datetime.now(timezone.utc),
         **ownership,
     }
+    if original_file_id:
+        record["original_file_id"] = original_file_id
     metadata_collection.update_one(
-        {"filename": filename, **ownership},
+        {"document_id": document_id, **ownership},
         {
             "$set": record
         },
@@ -134,6 +140,7 @@ def get_all_documents(
             "uploaded_at": 1,
             "total_chunks": 1,
             "status": 1,
+            "handoff_status": 1,
         },
     ).sort("uploaded_at", -1)
     return list(docs)
@@ -144,6 +151,7 @@ def delete_document(
     *,
     source_type: str = AICTE_REFERENCE,
     owner_id: Optional[str] = None,
+    document_id: Optional[str] = None,
 ) -> bool:
     vector_collection, metadata_collection = _collections(source_type)
     ownership = _ownership_query(source_type, owner_id)
@@ -165,12 +173,16 @@ def delete_document(
         nested_scope = {
             f"metadata.{key}": value for key, value in ownership.items()
         }
-    vector_collection.delete_many(
-        {"metadata.source": filename, **nested_scope}
-    )
-    vector_collection.delete_many({"source": filename, **top_level_scope})
+    if document_id:
+        vector_collection.delete_many({"metadata.document_id": document_id, **nested_scope})
+        vector_collection.delete_many({"document_id": document_id, **top_level_scope})
+    else:
+        vector_collection.delete_many(
+            {"metadata.source": filename, **nested_scope}
+        )
+        vector_collection.delete_many({"source": filename, **top_level_scope})
 
     result = metadata_collection.delete_one(
-        {"filename": filename, **metadata_scope}
+        {"filename": filename, **({"document_id": document_id} if document_id else {}), **metadata_scope}
     )
     return result.deleted_count > 0

@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import Mock, patch
+from bson import ObjectId
 
 from fastapi import Request
 from fastapi.testclient import TestClient
@@ -194,6 +195,46 @@ class UploadRoutingTests(unittest.TestCase):
     def authenticate(self, user):
         main.app.dependency_overrides[require_authenticated_user] = lambda: user
 
+    @patch("backend.routers.rag.delete_unsubmitted_draft_pdf")
+    @patch("backend.routers.rag.delete_document", return_value=True)
+    @patch("backend.routers.rag.get_workflow_database")
+    @patch("backend.routers.rag.get_designer_metadata_collection")
+    def test_designer_delete_removes_owned_draft_and_gridfs_pdf(
+        self, metadata_mock, workflow_db_mock, delete_mock, gridfs_delete_mock
+    ):
+        self.authenticate(DESIGNER_A)
+        metadata = {"_id": ObjectId(), "original_file_id": ObjectId()}
+        metadata_mock.return_value.find_one.return_value = metadata
+        metadata_mock.return_value.count_documents.return_value = 1
+        workflow_db_mock.return_value.curriculum_submissions.find_one.return_value = None
+
+        response = self.client.delete("/api/documents/curriculum.pdf")
+
+        self.assertEqual(response.status_code, 200)
+        delete_mock.assert_called_once_with(
+            "curriculum.pdf", source_type="submitted_curriculum", owner_id="designer-a", document_id=None
+        )
+        gridfs_delete_mock.assert_called_once_with(metadata["original_file_id"])
+
+    @patch("backend.routers.rag.delete_document")
+    @patch("backend.routers.rag.get_workflow_database")
+    @patch("backend.routers.rag.get_designer_metadata_collection")
+    def test_designer_delete_preserves_submission_history(
+        self, metadata_mock, workflow_db_mock, delete_mock
+    ):
+        self.authenticate(DESIGNER_A)
+        metadata = {"_id": ObjectId(), "original_file_id": ObjectId()}
+        metadata_mock.return_value.find_one.return_value = metadata
+        metadata_mock.return_value.count_documents.return_value = 1
+        workflow_db_mock.return_value.curriculum_submissions.find_one.return_value = {
+            "_id": ObjectId()
+        }
+
+        response = self.client.delete("/api/documents/curriculum.pdf")
+
+        self.assertEqual(response.status_code, 409)
+        delete_mock.assert_not_called()
+
     @patch("backend.routers.rag.process_and_store_pdf", return_value=(2, False))
     @patch(
         "backend.routers.rag.extract_pages_from_pdf",
@@ -206,20 +247,22 @@ class UploadRoutingTests(unittest.TestCase):
         response = self.client.post(
             "/api/documents/upload",
             data={"source_type": "aicte_reference"},
-            files={"file": ("official.pdf", b"pdf", "application/pdf")},
+            files={"file": ("official.pdf", b"%PDF test", "application/pdf")},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(process_mock.call_args.kwargs["source_type"], "aicte_reference")
         self.assertIsNone(process_mock.call_args.kwargs["owner_id"])
         extract_mock.assert_called_once()
 
+    @patch("backend.routers.rag.get_designer_metadata_collection")
+    @patch("backend.routers.rag.store_original_pdf", return_value=ObjectId())
     @patch("backend.routers.rag.process_and_store_pdf", return_value=(3, False))
     @patch(
         "backend.routers.rag.extract_pages_from_pdf",
         return_value=[PdfPage(page_number=1, text="Designer curriculum")],
     )
     def test_submitted_upload_routes_with_authenticated_owner(
-        self, extract_mock, process_mock
+        self, extract_mock, process_mock, store_mock, metadata_mock
     ):
         self.authenticate(DESIGNER_A)
         response = self.client.post(
@@ -228,7 +271,7 @@ class UploadRoutingTests(unittest.TestCase):
                 "source_type": "submitted_curriculum",
                 "curriculum_id": "shared-curriculum",
             },
-            files={"file": ("curriculum.pdf", b"pdf", "application/pdf")},
+            files={"file": ("curriculum.pdf", b"%PDF test", "application/pdf")},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -243,7 +286,7 @@ class UploadRoutingTests(unittest.TestCase):
         unauthenticated = self.client.post(
             "/api/documents/upload",
             data={"source_type": "aicte_reference"},
-            files={"file": ("official.pdf", b"pdf", "application/pdf")},
+            files={"file": ("official.pdf", b"%PDF test", "application/pdf")},
         )
         self.assertEqual(unauthenticated.status_code, 401)
 
@@ -251,16 +294,21 @@ class UploadRoutingTests(unittest.TestCase):
         wrong_role = self.client.post(
             "/api/documents/upload",
             data={"source_type": "aicte_reference"},
-            files={"file": ("official.pdf", b"pdf", "application/pdf")},
+            files={"file": ("official.pdf", b"%PDF test", "application/pdf")},
         )
         self.assertEqual(wrong_role.status_code, 403)
         process_mock.assert_not_called()
 
-    @patch("backend.routers.rag.get_all_documents", return_value=[])
+    @patch("backend.routers.rag.get_all_documents", return_value=[{
+        "filename": "curriculum.pdf", "total_chunks": 12,
+        "document_id": "doc-1", "source_type": "submitted_curriculum",
+        "curriculum_id": "cse", "handoff_status": "Ready for institute",
+    }])
     def test_document_listing_selects_role_specific_scope(self, list_mock):
         self.authenticate(DESIGNER_A)
         designer_response = self.client.get("/api/documents")
         self.assertEqual(designer_response.status_code, 200)
+        self.assertEqual(designer_response.json()[0]["handoff_status"], "Ready for institute")
         list_mock.assert_called_with(
             source_type="submitted_curriculum", owner_id="designer-a"
         )
@@ -303,14 +351,15 @@ class UploadRoutingTests(unittest.TestCase):
                 "source_type": "submitted_curriculum",
                 "curriculum_id": "shared-curriculum",
             },
-            files={"file": ("curriculum.pdf", b"pdf", "application/pdf")},
+            files={"file": ("curriculum.pdf", b"%PDF test", "application/pdf")},
         )
         self.assertEqual(response.status_code, 503)
         self.assertIn("CURRICULUM_MONGODB_URI", response.json()["detail"])
 
     @patch.dict("os.environ", {"ENABLE_DEMO_IDENTITY_ADAPTER": "true"})
     @patch("backend.routers.rag.get_all_documents", return_value=[])
-    def test_demo_designer_header_resolves_existing_u3_context(self, list_mock):
+    @patch("backend.services.workflow_service.find_user", return_value=None)
+    def test_demo_designer_header_resolves_existing_u3_context(self, _find_user_mock, list_mock):
         response = self.client.get(
             "/api/documents",
             headers={"X-Demo-User-Id": "u3"},
@@ -322,7 +371,8 @@ class UploadRoutingTests(unittest.TestCase):
 
     @patch.dict("os.environ", {"ENABLE_DEMO_IDENTITY_ADAPTER": "true"})
     @patch("backend.routers.rag.get_all_documents", return_value=[])
-    def test_demo_admin_header_resolves_existing_u1_context(self, list_mock):
+    @patch("backend.services.workflow_service.find_user", return_value=None)
+    def test_demo_admin_header_resolves_existing_u1_context(self, _find_user_mock, list_mock):
         response = self.client.get(
             "/api/documents",
             headers={"X-Demo-User-Id": "u1"},
@@ -431,6 +481,7 @@ class StoreSeparationTests(unittest.TestCase):
         designer_record = designer_metadata_mock.return_value.update_one.call_args.args[1]
         self.assertEqual(designer_record["$set"]["owner_id"], "designer-a")
         self.assertEqual(designer_record["$set"]["source_type"], "submitted_curriculum")
+        self.assertEqual(designer_metadata_mock.return_value.update_one.call_args.args[0]["document_id"], "doc-curriculum")
     def test_designer_a_can_extract_own_curriculum_but_designer_b_cannot(self):
         collection = OwnerFilteringCollection([curriculum_chunk()])
         extracted = extract_structured_curriculum(
@@ -583,7 +634,7 @@ class AnalyzerAuthorizationTests(unittest.TestCase):
         for operation in ("extract", "score", "analyze"):
             with self.subTest(operation=operation):
                 response = self.client.post(f"/api/analyzer/{operation}/private-a")
-                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.status_code, 403)
                 self.assertNotIn("designer-a", response.text)
 
     @patch.dict("os.environ", {"ENABLE_DEMO_IDENTITY_ADAPTER": ""})
@@ -594,7 +645,8 @@ class AnalyzerAuthorizationTests(unittest.TestCase):
 
     @patch.dict("os.environ", {"ENABLE_DEMO_IDENTITY_ADAPTER": "true"})
     @patch("backend.routers.analyzer.extract_structured_curriculum")
-    def test_demo_designer_identity_is_used_by_analyzer(self, extract_mock):
+    @patch("backend.services.workflow_service.find_user", return_value={"user_id": "u3", "role": "designer", "status": "Active"})
+    def test_demo_designer_cannot_use_reviewer_analyzer(self, _find_user_mock, extract_mock):
         extract_mock.return_value = StructuredCurriculum(
             curriculum_id="private-a",
             document_id="doc-u3",
@@ -605,12 +657,8 @@ class AnalyzerAuthorizationTests(unittest.TestCase):
             "/api/analyzer/extract/private-a",
             headers={"X-Demo-User-Id": "u3"},
         )
-        self.assertEqual(response.status_code, 200)
-        extract_mock.assert_called_once_with(
-            curriculum_id="private-a",
-            document_id=None,
-            owner_id="u3",
-        )
+        self.assertEqual(response.status_code, 403)
+        extract_mock.assert_not_called()
 
     def test_auth_adapter_reads_teammate_server_identity_contract(self):
         request = Request(

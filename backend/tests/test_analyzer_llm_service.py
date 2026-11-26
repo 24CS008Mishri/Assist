@@ -21,7 +21,7 @@ from backend.services.analyzer_llm_service import (
 from backend.services.scoring_service import score_structured_curriculum
 
 
-_DESIGNER = AuthenticatedUser(user_id="designer-a", role="designer")
+_DESIGNER = AuthenticatedUser(user_id="reviewer-a", role="reviewer")
 
 
 def _score():
@@ -101,6 +101,20 @@ class FakeLlm:
 
 
 class AnalyzerLlmServiceTests(unittest.TestCase):
+    def setUp(self):
+        self.submission_lookup = patch(
+            "backend.routers.analyzer.find_submission",
+            side_effect=lambda key: {
+                "submission_id": key,
+                "status": "Pending",
+                "curriculum_id": key.split("::", 1)[0],
+                "document_id": key.split("::", 1)[1],
+                "designer_id": "designer-a",
+            },
+        )
+        self.submission_lookup.start()
+        self.addCleanup(self.submission_lookup.stop)
+
     def test_only_fail_and_partial_checks_are_selected(self):
         score = _score()
         _configure(score, "structure.total_credits", CheckStatus.FAIL)
@@ -276,7 +290,7 @@ class AnalyzerLlmServiceTests(unittest.TestCase):
             None,
         )
         response = analyze_curriculum_endpoint(
-            "xyz-cse-2026", "doc-1", current_user=_DESIGNER
+            "xyz-cse-2026", "doc-1", submission_id="xyz-cse-2026::doc-1", current_user=_DESIGNER
         )
         self.assertTrue(response.issues_available)
         self.assertEqual(response.issues[0].issue_id, "issue_001")
@@ -293,7 +307,7 @@ class AnalyzerLlmServiceTests(unittest.TestCase):
         build_mock.return_value = score
         issues_mock.return_value = (False, [], ISSUES_UNAVAILABLE_MESSAGE)
         response = analyze_curriculum_endpoint(
-            "xyz-cse-2026", "doc-1", current_user=_DESIGNER
+            "xyz-cse-2026", "doc-1", submission_id="xyz-cse-2026::doc-1", current_user=_DESIGNER
         )
         self.assertFalse(response.issues_available)
         self.assertEqual(response.issues_error, ISSUES_UNAVAILABLE_MESSAGE)
@@ -317,7 +331,7 @@ class AnalyzerLlmServiceTests(unittest.TestCase):
         build_mock.return_value = score
 
         response = analyze_curriculum_endpoint(
-            "xyz-cse-2026", "doc-1", current_user=_DESIGNER
+            "xyz-cse-2026", "doc-1", submission_id="xyz-cse-2026::doc-1", current_user=_DESIGNER
         )
 
         issues_mock.assert_not_called()
@@ -338,10 +352,10 @@ class AnalyzerLlmServiceTests(unittest.TestCase):
         issues_mock.return_value = (False, [], ISSUES_UNAVAILABLE_MESSAGE)
 
         score_response = score_curriculum_endpoint(
-            "xyz-cse-2026", "doc-1", current_user=_DESIGNER
+            "xyz-cse-2026", "doc-1", submission_id="xyz-cse-2026::doc-1", current_user=_DESIGNER
         )
         analyze_response = analyze_curriculum_endpoint(
-            "xyz-cse-2026", "doc-1", current_user=_DESIGNER
+            "xyz-cse-2026", "doc-1", submission_id="xyz-cse-2026::doc-1", current_user=_DESIGNER
         )
 
         self.assertEqual(
@@ -391,7 +405,7 @@ class AnalyzerLlmServiceTests(unittest.TestCase):
         issues_mock.return_value = (False, [], ISSUES_UNAVAILABLE_MESSAGE)
 
         response = analyze_curriculum_endpoint(
-            "full-cse-2026", "doc-full", current_user=_DESIGNER
+            "full-cse-2026", "doc-full", submission_id="full-cse-2026::doc-full", current_user=_DESIGNER
         )
 
         self.assertEqual(response.document_scope, DocumentScope.FULL_CURRICULUM)
@@ -406,7 +420,7 @@ class AnalyzerLlmServiceTests(unittest.TestCase):
         score = _score()
         build_mock.return_value = score
         response = score_curriculum_endpoint(
-            "xyz-cse-2026", "doc-1", current_user=_DESIGNER
+            "xyz-cse-2026", "doc-1", submission_id="xyz-cse-2026::doc-1", current_user=_DESIGNER
         )
         self.assertEqual(response.model_dump(), score.model_dump())
         issues_mock.assert_not_called()

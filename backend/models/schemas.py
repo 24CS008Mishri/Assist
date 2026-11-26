@@ -70,6 +70,7 @@ class DocumentRecord(BaseModel):
     curriculum_id: Optional[str] = None
     year: Optional[int] = None
     version: Optional[str] = None
+    handoff_status: Optional[str] = None
 
 
 class LoginRequest(BaseModel):

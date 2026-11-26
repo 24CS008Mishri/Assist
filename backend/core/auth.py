@@ -11,11 +11,15 @@ class AuthenticatedUser:
 
     user_id: str
     role: str
+    name: Optional[str] = None
+    email: Optional[str] = None
 
 
 _ROLE_ALIASES = {
     "aicte admin": "admin",
     "curriculum designer": "designer",
+    "institute representative": "institute",
+    "reviewer / expert": "reviewer",
 }
 _DEMO_IDENTITY_HEADER = "X-Demo-User-Id"
 
@@ -63,17 +67,20 @@ def _demo_identity(request: Request) -> Optional[Mapping[str, Any]]:
     if not user_id:
         return None
 
-    # Lazy import avoids coupling the analyzer adapter to demo router startup.
+    # Keep compatibility with existing demo sessions, while MongoDB becomes
+    # authoritative for role and account state after the identity is migrated.
     from backend.routers.demo import USERS
+    from backend.services.workflow_service import find_user
 
-    return next(
-        (
-            user
-            for user in USERS
-            if user.get("id") == user_id and user.get("status") == "Active"
-        ),
-        None,
-    )
+    try:
+        record = find_user(user_id)
+    except Exception:
+        return None
+    if record:
+        if record.get("status") != "Active":
+            return None
+        return record
+    return next((user for user in USERS if user.get("id") == user_id and user.get("status") == "Active"), None)
 
 
 def get_current_identity(request: Request) -> Optional[AuthenticatedUser]:
@@ -88,7 +95,14 @@ def get_current_identity(request: Request) -> Optional[AuthenticatedUser]:
     role = _normalized_role(_identity_value(identity, "role"))
     if not user_id or not role:
         return None
-    return AuthenticatedUser(user_id=str(user_id), role=role)
+    name = _identity_value(identity, "name", "display_name")
+    email = _identity_value(identity, "email", "username")
+    return AuthenticatedUser(
+        user_id=str(user_id),
+        role=role,
+        name=str(name) if name else None,
+        email=str(email).strip().lower() if email else None,
+    )
 
 
 def require_authenticated_user(request: Request) -> AuthenticatedUser:

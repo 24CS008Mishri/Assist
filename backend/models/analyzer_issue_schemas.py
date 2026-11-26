@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -29,7 +29,29 @@ class AnalyzerIssue(BaseModel):
     curriculum_evidence: List[EvidenceReference] = Field(default_factory=list)
 
 
+class DecisionReason(BaseModel):
+    finding_id: str
+    criterion: str
+    title: str
+    severity: IssueSeverity
+    status: str
+    rule_type: str
+    explanation: str
+    recommended_action: str
+    expected: Any = None
+    actual: Any = None
+    aicte_evidence: List[AicteEvidenceReference] = Field(default_factory=list)
+    curriculum_evidence: List[EvidenceReference] = Field(default_factory=list)
+
+
+class DecisionSupport(BaseModel):
+    decision: Literal["ACCEPT", "REVISE", "REJECT", "INSUFFICIENT_EVIDENCE"]
+    summary: str
+    reasons: List[DecisionReason] = Field(default_factory=list)
+
+
 class AnalyzerAnalysis(AnalyzerScore):
     issues_available: bool
     issues_error: Optional[str] = None
     issues: List[AnalyzerIssue] = Field(default_factory=list)
+    decision_support: Optional[DecisionSupport] = None

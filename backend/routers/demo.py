@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.models.schemas import LoginRequest
+from backend.core.auth import AuthenticatedUser, require_authenticated_user, require_role
+from backend.services.workflow_service import authenticate_demo_user, list_users, public_user
 
 
 router = APIRouter(prefix="/api", tags=["demo"])
@@ -26,8 +28,9 @@ CHANGES = [
 
 
 @router.get("/users")
-def list_users():
-    return [{key: value for key, value in user.items() if key != "password"} for user in USERS]
+def list_users_endpoint(current_user: AuthenticatedUser = Depends(require_authenticated_user)):
+    require_role(current_user, "admin")
+    return list_users()
 
 
 @router.get("/curricula")
@@ -42,12 +45,13 @@ def list_changes():
 
 @router.post("/login")
 def login(request: LoginRequest):
-    user = next((item for item in USERS if item["email"].lower() == request.email.strip().lower() and item["password"] == request.password), None)
+    try:
+        user = authenticate_demo_user(request.email, request.password, USERS)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Account service is unavailable") from exc
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     return {
-        "name": user["name"],
-        "email": user["email"],
-        "role": user["role"],
-        "organization": user["organization"],
+        **public_user(user),
+        "organization": next((account.get("organization") for account in USERS if account["id"] == user["user_id"]), ""),
     }
