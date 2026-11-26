@@ -66,10 +66,10 @@ def get_aicte_vectorstore() -> MongoDBAtlasVectorSearch:
     )
 
 
-def get_designer_vectorstore() -> MongoDBAtlasVectorSearch:
+def get_designer_vectorstore(index_name: Optional[str] = None) -> MongoDBAtlasVectorSearch:
     settings = get_settings()
     return _make_vectorstore(
-        get_designer_collection(), settings.curriculum_mongodb_vector_index
+        get_designer_collection(), index_name or settings.curriculum_mongodb_vector_index
     )
 
 

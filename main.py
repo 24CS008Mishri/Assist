@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import get_settings
-from backend.routers import analyzer, demo, rag
+from backend.routers import analyzer, demo, designer_auth, live_assistant, rag
 
 
 settings = get_settings()
@@ -24,6 +24,8 @@ app.add_middleware(
 app.include_router(rag.router)
 app.include_router(demo.router)
 app.include_router(analyzer.router)
+app.include_router(live_assistant.router)
+app.include_router(designer_auth.router)
 
 @app.get("/")
 def read_root():

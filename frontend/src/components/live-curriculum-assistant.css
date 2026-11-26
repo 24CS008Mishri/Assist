@@ -1,0 +1,12 @@
+.live-assistant { padding: 17px; margin-bottom: 16px; max-width: 980px; }
+.live-assistant-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.live-assistant-heading h2 { margin: 0; font-size: 18px; }
+.live-assistant p { font-size: .8rem; margin: .4rem 0 0; }
+.live-assistant-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 14px; }
+.live-assistant-controls label { display: grid; gap: 5px; flex: 1 1 160px; margin: 0; min-width: 0; }
+.live-assistant-controls .field { min-width: 0; }
+.live-assistant-controls .live-assistant-note { flex-basis: 100%; }
+.live-assistant-video { display: block; width: 100%; height: clamp(300px, 55vh, 540px); border: 0; border-radius: .8rem; margin: 14px 0 10px; background: #191522; overflow: hidden; }
+.live-assistant-error { color: #9a2636; }
+.live-assistant-sources { margin-top: 12px; font-size: .8rem; }
+.live-assistant-sources h3 { font-size: .85rem; }
