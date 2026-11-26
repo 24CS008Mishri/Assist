@@ -4,6 +4,8 @@ from typing import Any, Mapping, Optional
 from dotenv import load_dotenv
 from fastapi import HTTPException, Request, status
 
+from backend.core.designer_sessions import enabled as verified_designer_enabled, local_video_enabled, session_identity
+
 load_dotenv()
 @dataclass(frozen=True)
 class AuthenticatedUser:
@@ -40,7 +42,10 @@ def _server_identity(request: Request) -> Any:
         identity = getattr(request.state, name, None)
         if identity is not None:
             return identity
-    return request.scope.get("user")
+    identity = request.scope.get("user")
+    if identity is not None and getattr(identity, "is_authenticated", True):
+        return identity
+    return session_identity(request)
 
 
 def _demo_identity_enabled() -> bool:
@@ -71,6 +76,7 @@ def _demo_identity(request: Request) -> Optional[Mapping[str, Any]]:
             user
             for user in USERS
             if user.get("id") == user_id and user.get("status") == "Active"
+            and not (user.get("role") == "designer" and (verified_designer_enabled() or local_video_enabled()))
         ),
         None,
     )
@@ -81,6 +87,10 @@ def get_current_identity(request: Request) -> Optional[AuthenticatedUser]:
     identity = _server_identity(request)
     if identity is None:
         identity = _demo_identity(request)
+    return _normalize_identity(identity)
+
+
+def _normalize_identity(identity: Any) -> Optional[AuthenticatedUser]:
     if identity is None:
         return None
 
@@ -99,6 +109,14 @@ def require_authenticated_user(request: Request) -> AuthenticatedUser:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
         )
+    return identity
+
+
+def require_verified_designer(request: Request) -> AuthenticatedUser:
+    identity = _normalize_identity(_server_identity(request))
+    if identity is None:
+        raise HTTPException(status_code=401, detail="Sign in with a verified Designer account to start a consultation.")
+    require_role(identity, "designer")
     return identity
 
 

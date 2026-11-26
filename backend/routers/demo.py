@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from backend.models.schemas import LoginRequest
+from backend.core.designer_sessions import start_local_designer_session
 
 
 router = APIRouter(prefix="/api", tags=["demo"])
@@ -41,13 +42,16 @@ def list_changes():
 
 
 @router.post("/login")
-def login(request: LoginRequest):
+def login(request: LoginRequest, http_request: Request, response: Response):
     user = next((item for item in USERS if item["email"].lower() == request.email.strip().lower() and item["password"] == request.password), None)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-    return {
+    profile = {
         "name": user["name"],
         "email": user["email"],
         "role": user["role"],
         "organization": user["organization"],
     }
+    if start_local_designer_session(user, http_request, response):
+        profile.update(id=user["id"], verified=True)
+    return profile
