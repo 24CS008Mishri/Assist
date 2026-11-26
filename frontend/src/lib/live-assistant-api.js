@@ -15,14 +15,6 @@ export async function liveRequest(path, options = {}) {
   }
 }
 
-export function loginVerifiedDesigner(email, password) {
-  return liveRequest('/api/designer-auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-}
-
 export function logoutVerifiedDesigner() {
   return liveRequest('/api/designer-auth/logout', { method: 'POST' });
 }

@@ -4,11 +4,7 @@ Open **Designer → AI Curriculum Assistant → Set up a video call**. Choose a 
 
 ## Setup
 
-1. **Designer identity.** Set `ENABLE_VERIFIED_DESIGNER_AUTH=true` for MongoDB-backed sign-in. From `Assist`, enroll an approved Designer using the immutable owner ID already attached to their curricula:
-   ```powershell
-   python -m backend.enroll_designer --email designer@example.edu --owner-id EXISTING_OWNER_ID --name "Designer Name"
-   ```
-   The terminal prompts for a password without echo. Choose **Verified Designer sign-in** on the portal login page. Accounts, hashed password credentials, and expiring opaque sessions live in dedicated Designer database collections. Password resets require the matching email and owner ID plus `--reset`. When verified mode is enabled, demo Designer headers cannot access private Designer routes. Other demo roles still use the existing demo flow. Set `ENABLE_DEMO_IDENTITY_ADAPTER=false` on a deployment with real data. An existing verified identity middleware can also supply the role and owner ID through `request.state.authenticated_user`.
+1. **Local Designer sign-in.** With the portal and API bound to loopback, set `ENABLE_LOCAL_DESIGNER_VIDEO_LOGIN=true` and open `http://127.0.0.1:5173/login`. Use the existing Designer email and password in the normal sign-in form. The server issues a short-lived session for the same curriculum owner ID after a successful local login. No account enrollment is needed. This switch is off by default and intended only for the loopback development portal. A shared deployment should keep it off and supply verified identity through its authentication middleware. When either authenticated mode is enabled, demo Designer headers cannot access private Designer routes. Other demo roles continue through the existing login.
 2. **Tavus.** Store the API key from [PAL Maker](https://maker.tavus.io/) and a random signing secret of at least 32 characters in `Assist/.env` as `TAVUS_API_KEY` and `TAVUS_TOOL_SECRET`. The [developer tier](https://www.tavus.io/pricing) offers free development minutes. The app reuses the existing `GROQ_API_KEY` and `GROQ_MODEL`. Tavus provides speech recognition, synthesis, and stock avatars.
 3. **Public callback.** For development, start a dedicated callback listener and expose only that listener with a [Cloudflare Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/):
    ```powershell

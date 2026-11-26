@@ -6,11 +6,44 @@ from fastapi.testclient import TestClient
 
 from backend.core import designer_sessions as identity
 from backend.core.auth import require_authenticated_user
-from backend.routers import designer_auth
+from backend.routers import demo, designer_auth
 from backend.tavus_callback import app as callback_app
 
 
 class VerifiedDesignerTests(TestCase):
+    def test_normal_login_can_start_a_loopback_only_session_for_existing_owner(self):
+        app = FastAPI()
+        app.include_router(demo.router)
+
+        @app.get("/private")
+        def private(user=Depends(require_authenticated_user)):
+            return {"owner": user.user_id}
+
+        user = next(user for user in demo.USERS if user["role"] == "designer")
+        payload = {"email": user["email"], "password": user["password"]}
+        session = MagicMock()
+        session.find_one.return_value = {"local_owner_id": user["id"]}
+        with (
+            patch.dict("os.environ", {
+                "ENABLE_VERIFIED_DESIGNER_AUTH": "false",
+                "ENABLE_LOCAL_DESIGNER_VIDEO_LOGIN": "true",
+                "ENABLE_DEMO_IDENTITY_ADAPTER": "true",
+            }),
+            patch.object(identity, "_sessions", return_value=session),
+            TestClient(app, base_url="https://localhost", client=("127.0.0.1", 50000)) as client,
+        ):
+            self.assertEqual(client.get("/private", headers={"X-Demo-User-Id": user["id"]}).status_code, 401)
+            denied = client.post("/api/login", json=payload, headers={"Origin": "https://example.org"})
+            self.assertNotIn(identity.COOKIE, denied.cookies)
+            remote = client.post("/api/login", json=payload, headers={
+                "Origin": "http://localhost:5173", "CF-Connecting-IP": "203.0.113.1",
+            })
+            self.assertNotIn(identity.COOKIE, remote.cookies)
+            trusted = client.post("/api/login", json=payload, headers={"Origin": "http://localhost:5173"})
+            self.assertEqual(trusted.json()["id"], user["id"])
+            self.assertIn(identity.COOKIE, trusted.cookies)
+            self.assertEqual(client.get("/private").json(), {"owner": user["id"]})
+
     def test_password_cookie_session_and_logout(self):
         app = FastAPI()
         app.include_router(designer_auth.router)

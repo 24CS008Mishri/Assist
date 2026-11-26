@@ -4,7 +4,7 @@ from typing import Any, Mapping, Optional
 from dotenv import load_dotenv
 from fastapi import HTTPException, Request, status
 
-from backend.core.designer_sessions import enabled as verified_designer_enabled, session_identity
+from backend.core.designer_sessions import enabled as verified_designer_enabled, local_video_enabled, session_identity
 
 load_dotenv()
 @dataclass(frozen=True)
@@ -76,7 +76,7 @@ def _demo_identity(request: Request) -> Optional[Mapping[str, Any]]:
             user
             for user in USERS
             if user.get("id") == user_id and user.get("status") == "Active"
-            and not (user.get("role") == "designer" and verified_designer_enabled())
+            and not (user.get("role") == "designer" and (verified_designer_enabled() or local_video_enabled()))
         ),
         None,
     )
