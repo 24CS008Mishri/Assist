@@ -112,7 +112,8 @@ test('designer curricula remain private and the role no longer opens Analyzer', 
 
 test('reviewer analyzer is bound to an official submission ID', () => {
   assert.match(appSource, /path === '\/reviewer\/analyzer'/);
-  assert.match(appSource, /submission_id/);
+  assert.match(analyzerSource, /const search = useSearch\(\)/);
+  assert.match(analyzerSource, /new URLSearchParams\(search\)\.get\('submission_id'\)/);
   assert.match(analyzerSource, /mockService\.analyzeSubmission\(submissionId\)/);
   assert.match(appSource, /path\.startsWith\('\/designer\/analyzer'\)[\s\S]*?Unauthorized/);
 });

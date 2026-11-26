@@ -6,7 +6,7 @@ import { logoutVerifiedDesigner } from '@/lib/live-assistant-api';
 import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, Menu, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UserCog, Users, Video, X } from 'lucide-react';
 import { mockService } from '@/lib/mock-services';
 import { analyzerDocumentKey, submittedCurriculumDocuments } from '@/lib/analyzer-utils';
-import ReviewerAnalyzer, { ReviewerAnalyzerPicker } from '@/components/reviewer-analyzer';
+import ReviewerAnalyzerPage from '@/components/reviewer-analyzer';
 const roles = {
     admin: { label: 'AICTE Admin', short: 'Admin', base: '/admin/dashboard', description: 'Authoritative governance and national oversight', icon: Landmark },
     reviewer: { label: 'Reviewer / Expert', short: 'Reviewer', base: '/reviewer/dashboard', description: 'Human review, evidence and final decisions', icon: ClipboardCheck },
@@ -182,10 +182,8 @@ function PageContent({ role, path, notify }) {
         return <SettingsPage notify={notify} />;
     if (path === '/reviewer/reviews')
         return <ReviewQueue notify={notify} />;
-    if (path === '/reviewer/analyzer') {
-        const submissionId = new URLSearchParams(window.location.search).get('submission_id');
-        return submissionId ? <ReviewerAnalyzer key={submissionId} submissionId={submissionId} notify={notify} formatDate={formatDocumentDate} /> : <ReviewerAnalyzerPicker />;
-    }
+    if (path === '/reviewer/analyzer')
+        return <ReviewerAnalyzerPage notify={notify} formatDate={formatDocumentDate} />;
     if (path === '/reviewer/policies')
         return <PolicyManagement notify={notify} audience="reviewer" />;
     if (path === '/reviewer/history' || path === '/reviewer/approved')

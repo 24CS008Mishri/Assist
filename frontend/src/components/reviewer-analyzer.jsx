@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'wouter';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Link, useLocation, useSearch } from 'wouter';
 import {
   ArrowLeft, ArrowUpRight, BarChart3, BookOpen, BriefcaseBusiness, Check, CheckCircle2,
   ChevronDown, CircleAlert, ClipboardCheck, FileText, GraduationCap, History, Layers3,
@@ -29,7 +29,15 @@ const recommendationLabels = {
   REJECT: ['Recommend rejection', 'red'], INSUFFICIENT_EVIDENCE: ['Manual review required', 'slate'],
 };
 
-export function ReviewerAnalyzerPicker() {
+export default function ReviewerAnalyzerPage({ notify, formatDate }) {
+  const search = useSearch();
+  const submissionId = new URLSearchParams(search).get('submission_id');
+  return submissionId
+    ? <ReviewerAnalyzer key={submissionId} submissionId={submissionId} notify={notify} formatDate={formatDate} />
+    : <ReviewerAnalyzerPicker />;
+}
+
+function ReviewerAnalyzerPicker() {
   const [queue, setQueue] = useState(null);
   const [error, setError] = useState('');
   const [, setLocation] = useLocation();
@@ -58,7 +66,7 @@ export function ReviewerAnalyzerPicker() {
   </div>;
 }
 
-export default function ReviewerAnalyzer({ submissionId, notify, formatDate }) {
+function ReviewerAnalyzer({ submissionId, notify, formatDate }) {
   const [submission, setSubmission] = useState(null);
   const [report, setReport] = useState(null);
   const [busy, setBusy] = useState(true);
@@ -130,7 +138,7 @@ export default function ReviewerAnalyzer({ submissionId, notify, formatDate }) {
         <div className="ra-section-heading"><h2>Criterion scores</h2><span>Select a criterion to review its checks</span></div>
         <div className="ra-criteria">
           {(report.criteria || []).map((criterion) => <ScoreTile key={criterion.criterion} criterion={criterion}
-            onClick={() => setSelectedCriterion(criterion)} />)}
+            onClick={(event) => setSelectedCriterion({ criterion, trigger: event.currentTarget })} />)}
         </div>
         {report.overall_evaluation_coverage === 0 && <Notice title="Insufficient evidence" testId="analyzer-insufficient"
           detail="Open a criterion to see which checks could be evaluated and which were excluded." />}
@@ -142,7 +150,7 @@ export default function ReviewerAnalyzer({ submissionId, notify, formatDate }) {
       </section>
       <AnalysisHistory submission={submission} formatDate={formatDate} historyState={historyState} retry={refreshHistory} />
     </>}
-    {selectedCriterion && <CriterionDialog criterion={selectedCriterion} report={report}
+    {selectedCriterion && <CriterionDialog {...selectedCriterion} report={report}
       onClose={() => setSelectedCriterion(null)} />}
   </div>;
 }
@@ -397,19 +405,33 @@ function Caret() {
   return <ChevronDown className="ra-caret" size={17} aria-hidden="true" />;
 }
 
-function CriterionDialog({ criterion, report, onClose }) {
+function CriterionDialog({ criterion, trigger, report, onClose }) {
   const dialog = useRef(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const modal = dialog.current;
-    const trigger = document.activeElement;
+    const from = trigger.getBoundingClientRect();
     modal.showModal();
+    let opening;
+    if (modal.animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const to = modal.getBoundingClientRect();
+      const x = from.left + from.width / 2 - (to.left + to.width / 2);
+      const y = from.top + from.height / 2 - (to.top + to.height / 2);
+      const scale = Math.max(0.28, Math.min(from.width / to.width, from.height / to.height, 1));
+      opening = modal.animate([
+        { transform: `translate(${x}px, ${y}px) scale(${scale})`, opacity: 0.55 },
+        { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+      ], { duration: 320, easing: 'cubic-bezier(.18,.8,.25,1)' });
+    }
     return () => {
+      opening?.cancel();
       modal.close();
-      trigger?.focus();
+      trigger.focus({ preventScroll: true });
     };
-  }, []);
-  return <dialog className="ra-dialog reviewer-analyzer" ref={dialog} aria-labelledby="ra-criterion-title" onClose={onClose}>
-    <header><div><p className="eyebrow">Criterion details</p><h2 id="ra-criterion-title">{criterion.label} · {criterionScoreLabel(criterion)}</h2></div>
+  }, [trigger]);
+  const Icon = criterionIcons[criterion.criterion] || ListChecks;
+  return <dialog className={`ra-dialog reviewer-analyzer ra-criterion-${criterion.criterion}`} ref={dialog} aria-labelledby="ra-criterion-title" onClose={onClose}>
+    <header><div className="ra-dialog-heading"><span className="ra-tile-icon"><Icon size={19} aria-hidden="true" /></span>
+      <div><p className="eyebrow">Criterion details</p><h2 id="ra-criterion-title">{criterion.label} · {criterionScoreLabel(criterion)}</h2></div></div>
       <button className="btn icon-btn" aria-label="Close criterion details" onClick={() => dialog.current.close()}><X size={19} /></button></header>
     <div className="ra-dialog-body">
       <div className="ra-facts">

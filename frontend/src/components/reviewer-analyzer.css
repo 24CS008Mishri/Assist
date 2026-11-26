@@ -41,7 +41,8 @@
 .ra-hero-footer p { margin-top: 6px; line-height: 1.5; }
 
 .ra-criteria { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 9px; }
-.ra-score-tile { --accent: #69428d; --tint: #efe3fb; display: grid; grid-template-rows: auto minmax(2.35em, auto) auto auto; align-content: start; gap: 6px; padding: 11px; border: 1px solid var(--ra-line); border-radius: .75rem; background: var(--ra-panel); color: var(--ra-ink); text-align: left; cursor: pointer; transition: border-color .15s, background-color .15s; }
+:is(.ra-score-tile, .ra-dialog) { --accent: #69428d; --tint: #efe3fb; }
+.ra-score-tile { display: grid; grid-template-rows: auto minmax(2.35em, auto) auto auto; align-content: start; gap: 6px; padding: 11px; border: 1px solid var(--ra-line); border-radius: .75rem; background: var(--ra-panel); color: var(--ra-ink); text-align: left; cursor: pointer; transition: border-color .15s, background-color .15s; }
 .ra-score-tile:hover { border-color: var(--accent); background: var(--tint); }
 .ra-criterion-compliance { --accent: #32605e; --tint: #e1f2ef; }
 .ra-criterion-industry_relevance { --accent: #80501e; --tint: #fff0d9; }
@@ -133,8 +134,15 @@ details[open] > summary > .ra-caret, .ra-hero-footer details[open] > summary svg
 .ra-dialog { width: min(755px, calc(100% - 20px)); max-height: min(680px, 89dvh); padding: 0; border: 1px solid var(--ra-line); border-radius: .9rem; background: var(--ra-panel); }
 .ra-dialog::backdrop { background: rgb(35 24 48 / .49); }
 .ra-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; position: sticky; top: 0; z-index: 1; padding: 11px 14px; border-bottom: 1px solid var(--ra-line); background: #faf5ff; }
+.ra-dialog-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ra-dialog-heading .ra-tile-icon { flex-shrink: 0; color: var(--accent); }
 .ra-dialog h2 { font-size: 1.16rem; margin-top: 3px; }
 .ra-dialog-body { display: grid; gap: 9px; padding: 12px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .ra-dialog[open]::backdrop, .ra-dialog[open] .ra-dialog-body { animation: ra-dialog-reveal .28s ease-out; }
+  @keyframes ra-dialog-reveal { from { opacity: 0; } to { opacity: 1; } }
+}
 
 @media (max-width: 1200px) { .ra-criteria { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 640px) {
