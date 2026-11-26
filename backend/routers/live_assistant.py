@@ -8,7 +8,7 @@ import re
 from functools import lru_cache
 from time import monotonic
 from urllib.parse import urlencode, urlsplit, urlunsplit
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from anyio import fail_after, to_thread
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -21,9 +21,11 @@ from typing import Literal
 
 from backend.core.auth import AuthenticatedUser, require_verified_designer
 from backend.data.database import get_designer_database, get_designer_metadata_collection
+from backend.routers import live_transcripts
 from backend.services.live_curriculum_knowledge import PRIVATE_SOURCE, answer_live_question
 
 router = APIRouter(prefix="/api/live-assistant", tags=["live-assistant"])
+router.include_router(live_transcripts.router)
 logger = logging.getLogger(__name__)
 LANGUAGES = ("en-in", "hi", "gu")
 MAX_CALL_SECONDS = 3600
@@ -51,6 +53,7 @@ class StartRequest(BaseModel):
     curriculum_id: str | None = Field(default=None, max_length=250)
     language: Literal["en-in", "hi", "gu"] = "en-in"
     resume_topic: str | None = Field(default=None, max_length=900)
+    transcript_id: UUID | None = None
 
 
 class ToolRequest(BaseModel):
@@ -130,12 +133,19 @@ def start_session(body: StartRequest, user: AuthenticatedUser = Depends(require_
     key, pal_id, _ = _configuration()
     if bool(body.document_id) != bool(body.curriculum_id):
         raise HTTPException(422, "Select a curriculum and its document version together.")
-    if body.document_id and not get_designer_metadata_collection().find_one(
-        {"owner_id": user.user_id, "source_type": PRIVATE_SOURCE,
-         "document_id": body.document_id, "curriculum_id": body.curriculum_id,
-         "status": "Active"}, {"_id": 1}
-    ):
-        raise HTTPException(404, "Curriculum not found.")
+    title = "General consultation"
+    if body.document_id:
+        document = get_designer_metadata_collection().find_one(
+            {"owner_id": user.user_id, "source_type": PRIVATE_SOURCE,
+             "document_id": body.document_id, "curriculum_id": body.curriculum_id,
+             "status": "Active"}, {"filename": 1}
+        )
+        if document is None:
+            raise HTTPException(404, "Curriculum not found.")
+        title = document.get("filename") or body.curriculum_id
+    transcript_id = live_transcripts.continue_transcript(
+        user.user_id, body.transcript_id, body.document_id, body.curriculum_id,
+    ) if body.transcript_id else None
 
     sessions = _sessions()
     now = datetime.now(timezone.utc)
@@ -187,8 +197,13 @@ def start_session(body: StartRequest, user: AuthenticatedUser = Depends(require_
         )
         if not updated.matched_count:
             raise HTTPException(409, "The session expired during setup. Please retry.")
+        if not transcript_id:
+            transcript_id = live_transcripts.new_transcript(
+                user.user_id, body.document_id, body.curriculum_id, title, body.language,
+            )
         return JSONResponse(
-            {"id": conversation_id, "embed_url": embed_url, "expires_at": expires.isoformat()},
+            {"id": conversation_id, "embed_url": embed_url, "expires_at": expires.isoformat(),
+             "transcript_id": transcript_id},
             headers={"Cache-Control": "no-store"},
         )
     except Exception:
@@ -212,7 +227,10 @@ def current_session(user: AuthenticatedUser = Depends(require_verified_designer)
 
 
 @router.get("/sessions/{conversation_id}/sources")
-def session_sources(conversation_id: str, user: AuthenticatedUser = Depends(require_verified_designer)):
+def session_sources(
+    conversation_id: str, check_provider: bool = False,
+    user: AuthenticatedUser = Depends(require_verified_designer),
+):
     row = _sessions().find_one(
         {"_id": user.user_id, "conversation_id": conversation_id, "state": "active",
          "expires_at": {"$gt": datetime.now(timezone.utc)}},
@@ -220,6 +238,17 @@ def session_sources(conversation_id: str, user: AuthenticatedUser = Depends(requ
     )
     if row is None:
         raise HTTPException(404, "Consultation expired or unavailable.")
+    if check_provider:
+        key, _, _ = _configuration()
+        try:
+            response = httpx.get(
+                f"https://tavusapi.com/v2/conversations/{conversation_id}",
+                headers={"x-api-key": key}, timeout=3,
+            )
+            if response.is_success and response.json().get("status") == "ended":
+                raise HTTPException(404, "The video room has ended.")
+        except (httpx.RequestError, ValueError):
+            pass  # A brief provider outage should not end an otherwise healthy room.
     return JSONResponse({"sources": row.get("sources", [])}, headers={"Cache-Control": "no-store"})
 
 

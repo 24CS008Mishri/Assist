@@ -27,11 +27,11 @@ function VideoTrack({ track, className, label }) {
   return <video ref={element} className={className} aria-label={label} autoPlay playsInline muted />;
 }
 
-export default function TavusVideo({ room, sources, onEnd, reconnecting, reconnectFailed, onDisconnected, onRetry, onTopic }) {
+export default function TavusVideo({ room, sources, onEnd, reconnecting, reconnectFailed, onDisconnected, onRetry, onTopic, onTurn }) {
   const container = useRef(null);
   const callRef = useRef(null);
   const audioElement = useRef(null);
-  const handlers = useRef({ onDisconnected, onTopic });
+  const handlers = useRef({ onDisconnected, onTopic, onTurn });
   const microphoneEnabled = useRef(true);
   const cameraEnabled = useRef(false);
   const [status, setStatus] = useState('Connecting…');
@@ -45,7 +45,7 @@ export default function TavusVideo({ room, sources, onEnd, reconnecting, reconne
   const playbackWarning = useRef(() => setPlaybackBlocked(true));
   useMediaTrack(audioElement, tracks.avatarAudio, playbackWarning.current);
 
-  useEffect(() => { handlers.current = { onDisconnected, onTopic }; }, [onDisconnected, onTopic]);
+  useEffect(() => { handlers.current = { onDisconnected, onTopic, onTurn }; }, [onDisconnected, onTopic, onTurn]);
 
   useEffect(() => {
     let disposed = false;
@@ -89,6 +89,7 @@ export default function TavusVideo({ room, sources, onEnd, reconnecting, reconne
       if (seenUtterances.has(key)) return;
       seenUtterances.add(key);
       if (speaker === 'user') handlers.current.onTopic(text);
+      handlers.current.onTurn({ role: speaker, text });
       setPartial(null);
       setTranscript(previous => [...previous.slice(-99), { key, role: speaker, text }]);
     }

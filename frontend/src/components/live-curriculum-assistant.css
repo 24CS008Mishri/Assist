@@ -41,3 +41,18 @@
   .virtual-call-controls .btn { padding-inline: 7px; font-size: .75rem; }
   .virtual-drawer { top: 44px; bottom: 88px; }
 }
+.virtual-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.consultation-history { width: min(640px, calc(100% - 24px)); max-height: 82dvh; padding: clamp(14px, 4vw, 26px); border: 1px solid #d8c9ec; border-radius: 14px; color: hsl(var(--foreground)); background: #fdfbff; }
+.consultation-history::backdrop { background: #21192d95; }
+.consultation-history header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.consultation-history h2, .consultation-history h3 { margin: 0; }
+.consultation-history h3 { margin-top: 16px; overflow-wrap: anywhere; }
+.consultation-history-list, .consultation-turns { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 8px; }
+.consultation-history-list button { width: 100%; padding: 10px 12px; display: flex; justify-content: space-between; align-items: start; gap: 8px; text-align: start; border: 1px solid #e4d7f2; border-radius: 8px; background: #f4eefa; color: inherit; cursor: pointer; }
+.consultation-history-list strong { overflow-wrap: anywhere; }
+.consultation-history-list span { font-size: .8rem; flex-shrink: 0; }
+.consultation-turns li { padding: 10px 12px; border-radius: 8px; background: #f2ecf8; overflow-wrap: anywhere; }
+.consultation-turns p { margin: 4px 0 0; white-space: pre-wrap; }
+@media (max-width: 450px) {
+  .consultation-history-list button { flex-direction: column; }
+}

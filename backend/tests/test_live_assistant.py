@@ -4,6 +4,7 @@ import json
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -61,18 +62,62 @@ class LiveAssistantTests(TestCase):
                 "conversation_id": "call1", "conversation_url": "https://tavus.daily.co/call1",
                 "meeting_token": "private-token",
             },
-        ) as provider:
+        ) as provider, patch.object(live.live_transcripts, "new_transcript", return_value="saved-history") as new_history:
             result = self.client.post("/api/live-assistant/sessions", json={"language": "gu"},
                                       headers={"test-user": "designer-1"})
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.headers["cache-control"], "no-store")
         self.assertEqual(result.json()["embed_url"], "https://tavus.daily.co/call1?t=private-token")
-        self.assertEqual(set(result.json()), {"id", "embed_url", "expires_at"})
+        self.assertEqual(set(result.json()), {"id", "embed_url", "expires_at", "transcript_id"})
+        self.assertEqual(result.json()["transcript_id"], "saved-history")
+        new_history.assert_called_once_with("designer-1", None, None, "General consultation", "gu")
         body = provider.call_args.kwargs["body"]
         self.assertTrue(body["require_auth"])
         self.assertEqual(body["custom_greeting"], live.GREETINGS["gu"])
         self.assertEqual(body["properties"]["participant_left_timeout"], 90)
         self.assertEqual(body["properties"]["languages"], ["gu", "en-in", "hi"])
+
+    def test_replacement_room_reuses_the_same_transcript(self):
+        history_id = UUID(int=1)
+        sessions = MagicMock()
+        sessions.update_one.return_value.matched_count = 1
+        with patch.object(live, "_sessions", return_value=sessions), patch.object(live, "_tavus_post", return_value={
+            "conversation_id": "replacement", "conversation_url": "https://tavus.daily.co/replacement", "meeting_token": "private-token",
+        }), patch.object(live.live_transcripts, "continue_transcript", return_value=str(history_id)) as resume, patch.object(
+            live.live_transcripts, "new_transcript",
+        ) as new_history:
+            result = self.client.post("/api/live-assistant/sessions", json={"transcript_id": str(history_id)},
+                                      headers={"test-user": "designer-1"})
+        self.assertEqual(result.json()["transcript_id"], str(history_id))
+        resume.assert_called_once_with("designer-1", history_id, None, None)
+        new_history.assert_not_called()
+
+    def test_transcript_read_and_write_require_ownership(self):
+        history_id = str(UUID(int=1))
+        history = MagicMock()
+        history.find_one.return_value = None
+        with patch.object(live.live_transcripts, "_history", return_value=history), patch.object(
+            live.live_transcripts, "_turns",
+        ) as turns:
+            headers = {"test-user": "unrelated-designer"}
+            self.assertEqual(self.client.get(f"/api/live-assistant/transcripts/{history_id}", headers=headers).status_code, 404)
+            saved = self.client.post(f"/api/live-assistant/transcripts/{history_id}/turns", headers=headers, json={
+                "id": str(UUID(int=2)), "sequence": 1, "role": "user", "text": "Test question",
+            })
+            self.assertEqual(saved.status_code, 404)
+            self.assertEqual(history.find_one.call_args.args[0], {"_id": history_id, "owner_id": "unrelated-designer"})
+            turns.assert_not_called()
+
+    def test_source_poll_detects_ended_provider_room_for_the_owner(self):
+        sessions = MagicMock()
+        sessions.find_one.return_value = {"sources": []}
+        ended = SimpleNamespace(is_success=True, json=lambda: {"status": "ended"})
+        with patch.object(live, "_sessions", return_value=sessions), patch.object(live.httpx, "get", return_value=ended) as provider:
+            result = self.client.get("/api/live-assistant/sessions/call1/sources?check_provider=true",
+                                     headers={"test-user": "designer-1"})
+            self.assertEqual(result.status_code, 404)
+            self.assertEqual(sessions.find_one.call_args.args[0]["_id"], "designer-1")
+            provider.assert_called_once()
 
     def test_callback_rejects_invalid_hmac_and_resolves_owner_from_session(self):
         event = {

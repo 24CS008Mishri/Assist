@@ -3,6 +3,7 @@ import { Video } from 'lucide-react';
 import { liveRequest as request } from '@/lib/live-assistant-api';
 import './live-curriculum-assistant.css';
 import TavusVideo from './tavus-video';
+import ConsultationHistory, { transcriptsApi } from './consultation-history';
 
 const api = '/api/live-assistant/sessions';
 
@@ -22,22 +23,56 @@ export default function LiveCurriculumAssistant() {
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectFailed, setReconnectFailed] = useState(false);
   const [error, setError] = useState('');
+  const [historyError, setHistoryError] = useState(false);
   const activeRoom = useRef(null);
   const mounted = useRef(false);
   const renewing = useRef(false);
   const lastTopic = useRef('');
+  const turnSequence = useRef(0);
+  const pendingTurns = useRef(new Map());
+
+  function saveTurn(item) {
+    if (item.saving) return item.saving;
+    item.saving = request(`${transcriptsApi}/${encodeURIComponent(item.transcriptId)}/turns`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(item.turn),
+      keepalive: true,
+    }).then(() => {
+      pendingTurns.current.delete(item.turn.id);
+      if (mounted.current && !pendingTurns.current.size) setHistoryError(false);
+    }).catch(() => {
+      if (mounted.current) setHistoryError(true);
+    }).finally(() => { item.saving = null; });
+    return item.saving;
+  }
+
+  function flushTranscript() {
+    return Promise.all([...pendingTurns.current.values()].map(saveTurn));
+  }
+
+  function recordTurn(transcriptId, { role, text }) {
+    if (!transcriptId) return;
+    const turn = { id: crypto.randomUUID(), sequence: ++turnSequence.current, role, text };
+    const item = { transcriptId, turn };
+    pendingTurns.current.set(turn.id, item);
+    void saveTurn(item);
+  }
 
   useEffect(() => {
     mounted.current = true;
     const disconnect = () => {
+      void flushTranscript();
       const id = activeRoom.current;
       activeRoom.current = null;
       if (id) void closeRoom(id).catch(() => {});
     };
     window.addEventListener('pagehide', disconnect);
+    window.addEventListener('online', flushTranscript);
     return () => {
       mounted.current = false;
       window.removeEventListener('pagehide', disconnect);
+      window.removeEventListener('online', flushTranscript);
       disconnect();
     };
   }, []);
@@ -45,9 +80,13 @@ export default function LiveCurriculumAssistant() {
   useEffect(() => {
     if (!room) return undefined;
     let cancelled = false;
+    let polls = 0;
     const refresh = async () => {
       try {
-        const response = await request(`${api}/${encodeURIComponent(room.id)}/sources`, { timeoutMs: 3500 });
+        const checkProvider = ++polls % 3 === 0;
+        const response = await request(`${api}/${encodeURIComponent(room.id)}/sources?check_provider=${checkProvider}`, {
+          timeoutMs: checkProvider ? 6000 : 3500,
+        });
         if (!cancelled) setSources(response.sources);
       } catch (failure) {
         if (cancelled || renewing.current || activeRoom.current !== room.id) return;
@@ -91,13 +130,14 @@ export default function LiveCurriculumAssistant() {
 
   useEffect(() => { void open(); }, []);
 
-  function createRoom(resumeTopic) {
+  function createRoom(resumeTopic, transcriptId) {
     const [documentId, curriculumId] = documentKey ? JSON.parse(documentKey) : [null, null];
     return request(api, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         language, document_id: documentId, curriculum_id: curriculumId, resume_topic: resumeTopic,
+        transcript_id: transcriptId,
       }),
     });
   }
@@ -111,7 +151,7 @@ export default function LiveCurriculumAssistant() {
     try {
       await request(`${api}/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (activeRoom.current !== id) return;
-      const replacement = await createRoom(lastTopic.current);
+      const replacement = await createRoom(lastTopic.current, room.transcript_id);
       if (!mounted.current || activeRoom.current !== id) {
         void closeRoom(replacement.id).catch(() => {});
         return;
@@ -135,6 +175,7 @@ export default function LiveCurriculumAssistant() {
     setError('');
     setSources([]);
     lastTopic.current = '';
+    turnSequence.current = 0;
     try {
       const result = await createRoom();
       if (!mounted.current) {
@@ -165,6 +206,7 @@ export default function LiveCurriculumAssistant() {
     setSources([]);
     try {
       await request(`${api}/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+      await flushTranscript();
       activeRoom.current = null;
       setExistingId(null);
     } catch (failure) {
@@ -182,12 +224,18 @@ export default function LiveCurriculumAssistant() {
           <h1 id="virtual-assistant-heading" className="font-display">Virtual Assistant</h1>
           <p>Live curriculum consultation with Vaani, an AI-generated consultant.</p>
         </div>
+        <ConsultationHistory />
       </header>
       {error && <p className="virtual-error" role="alert">{error}</p>}
+      {historyError && <p className="virtual-error" role="status">
+        Some transcript turns are waiting to be saved. <button type="button" className="btn"
+          onClick={() => { void flushTranscript(); }}>Retry saving</button>
+      </p>}
       {room ? <TavusVideo room={room} sources={sources} onEnd={end}
         reconnecting={reconnecting} reconnectFailed={reconnectFailed}
         onDisconnected={() => { void reconnect(room.id); }}
         onRetry={() => { void reconnect(room.id, true); }}
+        onTurn={turn => recordTurn(room.transcript_id, turn)}
         onTopic={text => { lastTopic.current = text.slice(0, 900); }} /> : (
         <div className="virtual-lobby">
           <div className="virtual-setup surface">
@@ -220,7 +268,7 @@ export default function LiveCurriculumAssistant() {
               )}
               {!ready && !busy && <button className="btn" type="button" onClick={open}>Retry connection</button>}
             </form>
-            <p className="muted virtual-privacy">Tavus processes your voice and any camera video you enable. You can switch languages during the call.</p>
+            <p className="muted virtual-privacy">Tavus processes your voice and any camera video you enable. The portal saves a text transcript for you to review.</p>
           </div>
         </div>
       )}
