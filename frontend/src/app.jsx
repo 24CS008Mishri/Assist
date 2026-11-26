@@ -7,6 +7,7 @@ import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen,
 import { mockService } from '@/lib/mock-services';
 import { analyzerDocumentKey, submittedCurriculumDocuments } from '@/lib/analyzer-utils';
 import ReviewerAnalyzerPage from '@/components/reviewer-analyzer';
+import ReviewQueue from '@/components/reviewer-queue';
 const roles = {
     admin: { label: 'AICTE Admin', short: 'Admin', base: '/admin/dashboard', description: 'Authoritative governance and national oversight', icon: Landmark },
     reviewer: { label: 'Reviewer / Expert', short: 'Reviewer', base: '/reviewer/dashboard', description: 'Human review, evidence and final decisions', icon: ClipboardCheck },
@@ -181,7 +182,7 @@ function PageContent({ role, path, notify }) {
     if (path.endsWith('/settings'))
         return <SettingsPage notify={notify} />;
     if (path === '/reviewer/reviews')
-        return <ReviewQueue notify={notify} />;
+        return <ReviewQueue notify={notify} formatDate={formatDocumentDate} />;
     if (path === '/reviewer/analyzer')
         return <ReviewerAnalyzerPage notify={notify} formatDate={formatDocumentDate} />;
     if (path === '/reviewer/policies')
@@ -586,40 +587,6 @@ function AuditLogs() {
         {loading ? <div className="surface" style={{ padding: 22 }}>Loading recorded activity…</div> : <SectionCard title={`${shown.length} recorded events`}><div className="table-scroll"><table className="data-table"><thead><tr><th>User</th><th>Institute</th><th>Action</th><th>Curriculum</th><th>Timestamp</th><th>Details</th></tr></thead><tbody>{shown.map(event => <><tr key={event.event_id}><td><strong>{event.actor_name}</strong></td><td>{event.institute_name}</td><td><StatusBadge status={event.action} /></td><td>{event.curriculum_name} <span className="muted">v{event.version}</span></td><td className="muted">{formatDocumentDate(event.created_at)}</td><td><button className="btn btn-ghost" onClick={() => setExpanded(expanded === event.event_id ? '' : event.event_id)} aria-expanded={expanded === event.event_id}><Eye size={14} /> {expanded === event.event_id ? 'Hide' : 'Inspect'}</button></td></tr>{expanded === event.event_id && <tr key={`${event.event_id}-details`}><td colSpan="6"><div className="surface" style={{ padding: 11 }}><p style={{ margin: '0 0 6px' }}>{event.details || 'No additional detail was recorded.'}</p>{event.decision_justification && <p className="muted" style={{ margin: '4px 0' }}><strong>Decision justification:</strong> {event.decision_justification}</p>}<span className="muted" style={{ fontSize: 10 }}>Submission {event.submission_id} · Curriculum ID {event.curriculum_id}</span></div></td></tr>}</>)}</tbody></table>{!shown.length && <p className="muted" style={{ padding: 12 }}>{events.length ? 'No events match these filters.' : 'No submission or review events have been recorded yet.'}</p>}</div></SectionCard>}
     </div>;
 }
-function ReviewQueue({ notify }) {
-    const [queue, setQueue] = useState([]);
-    const [selectedId, setSelectedId] = useState('');
-    const [detail, setDetail] = useState(null);
-    const [comment, setComment] = useState('');
-    const [justification, setJustification] = useState('');
-    const [documentUrl, setDocumentUrl] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [, setLocation] = useLocation();
-    const load = async () => {
-        setLoading(true); setError('');
-        try { const rows = await mockService.getPendingSubmissions(); setQueue(rows); const id = rows.some(row => row.submission_id === selectedId) ? selectedId : rows[0]?.submission_id || ''; setSelectedId(id); setDetail(id ? await mockService.getSubmission(id) : null); }
-        catch (e) { setError(e.message || 'Could not load the reviewer queue.'); }
-        finally { setLoading(false); }
-    };
-    useEffect(() => { void load(); }, []);
-    const select = async (id) => { setSelectedId(id); setDocumentUrl(''); try { setDetail(await mockService.getSubmission(id)); setError(''); } catch (e) { setError(e.message); } };
-    const decide = async (decision) => {
-        if (!detail) return;
-        try { await mockService.decideSubmission(detail.submission_id, decision, comment, justification); setComment(''); setJustification(''); setDetail(null); await load(); notify(`Decision recorded: ${decision === 'accept' ? 'Accepted' : decision === 'review' ? 'Revision Required' : 'Rejected'}.`); }
-        catch (e) { setError(e.message || 'Decision could not be saved.'); }
-    };
-    const analyzerReport = detail?.analyses?.[0]?.report;
-    const recommendation = analyzerReport?.decision_support?.decision;
-    const overrideRequired = decision => Boolean(recommendation && ({ accept: 'ACCEPT', review: 'REVISE', reject: 'REJECT' }[decision] !== recommendation));
-    return <div className="content"><PageHeader eyebrow="Reviewer / Expert" title="Pending reviews" detail="Database submissions awaiting Reviewer Compliance." action={<button className="btn" onClick={() => void load()}><RefreshCw size={14} /> Refresh queue</button>} />
-        {error && <div className="surface" role="alert" style={{ padding: 13, marginBottom: 13, color: '#8e3c39' }}>{error}</div>}
-        {loading ? <div className="surface" style={{ padding: 28, textAlign: 'center' }}>Loading pending submissionsâ€¦</div> : queue.length === 0 ? <div className="surface" style={{ padding: 32, textAlign: 'center' }}><Inbox size={28} color="#7758aa" /><h2 className="font-display">No pending submissions</h2><p className="muted" style={{ fontSize: 12 }}>New portal uploads will appear here.</p></div> : <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 16 }}>
-            <SectionCard title={`Pending queue Â· ${queue.length}`}><div style={{ display: 'grid', gap: 9 }}>{queue.map(item => <button key={item.submission_id} onClick={() => void select(item.submission_id)} className="surface" style={{ textAlign: 'left', padding: 14, border: selectedId === item.submission_id ? '2px solid #9d7bc7' : undefined }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12 }}>{item.curriculum_name}</strong><StatusBadge status={item.status} /></div><p className="muted" style={{ fontSize: 10, margin: '6px 0' }}>{item.institute_name} Â· Version {item.version}</p><span className="muted" style={{ fontSize: 10 }}>ID {item.submission_id} Â· {formatDocumentDate(item.submitted_at)}</span></button>)}</div></SectionCard>
-            <SectionCard title="Reviewer Compliance">{detail && <><span className="eyebrow">{detail.submission_id} Â· Version {detail.version}</span><h2 className="font-display" style={{ fontSize: 19, margin: '8px 0' }}>{detail.curriculum_name}</h2><p className="muted" style={{ fontSize: 11 }}>Curriculum {detail.curriculum_id} Â· Submitted {formatDocumentDate(detail.submitted_at)}</p>{detail.previous_versions?.length > 0 && <details className="surface" style={{ padding: 12, margin: '12px 0' }}><summary><strong>Earlier submitted versions</strong></summary>{detail.previous_versions.map(previous => <div key={previous.submission_id} style={{ paddingTop: 10 }}><span>v{previous.version} Â· {previous.status} Â· {formatDocumentDate(previous.submitted_at)}</span>{previous.analyses?.[0]?.report?.overall_score != null && <span> Â· analyzer score {previous.analyses[0].report.overall_score}</span>}</div>)}</details>}<div className="surface" style={{ padding: 12, margin: '14px 0' }}><strong style={{ fontSize: 12 }}>Submitted PDF</strong><div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}><button className="btn" onClick={async () => { try { if (documentUrl) URL.revokeObjectURL(documentUrl); setDocumentUrl(await mockService.getSubmissionDocument(detail.submission_id)); } catch (e) { setError(e.message); } }}><Eye size={14} /> Securely load document</button>{documentUrl && <a className="btn btn-primary" href={documentUrl} target="_blank" rel="noreferrer">Open PDF</a>}</div></div><button className="btn btn-primary" onClick={() => setLocation(`/reviewer/analyzer?submission_id=${encodeURIComponent(detail.submission_id)}`)}><BarChart3 size={14} /> Analyze this submission</button>{analyzerReport?.decision_support && <DecisionRecommendationPanel support={analyzerReport.decision_support} />}<label className="label" style={{ marginTop: 16 }}>Feedback for the institute and designer</label><textarea className="textarea" value={comment} onChange={e => setComment(e.target.value)} placeholder="Required for revision or rejection decisions." />{recommendation && <div style={{ marginTop: 10 }}><label className="label" htmlFor="decision-justification">Decision justification (required when it differs from {recommendation})</label><textarea id="decision-justification" className="textarea" value={justification} onChange={e => setJustification(e.target.value)} placeholder="Explain the reason for your decision." /></div>}<div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 11 }}><button className="btn btn-primary" disabled={!analyzerReport || Boolean(overrideRequired('accept') && !justification.trim())} onClick={() => void decide('accept')}><CheckCircle2 size={14} /> Accept</button><button className="btn" disabled={!comment.trim() || Boolean(overrideRequired('review') && !justification.trim())} onClick={() => void decide('review')}><RefreshCw size={14} /> Request revision</button><button className="btn btn-danger" disabled={!comment.trim() || Boolean(overrideRequired('reject') && !justification.trim())} onClick={() => void decide('reject')}><X size={14} /> Reject</button></div><p className="muted" style={{ fontSize: 10, lineHeight: 1.5 }}>Run the Analyzer before accepting. Revision and rejection require actionable feedback.</p></>}{!detail && <p className="muted">Select a pending submission.</p>}</SectionCard>
-        </div>}
-    </div>;
-}
 function ReviewSupportingPage({ path }) {
     const title = path.endsWith('history') ? 'Review history' : path.endsWith('policies') ? 'Reviewer policies' : 'Approved curricula';
     const [items, setItems] = useState([]);
@@ -984,33 +951,6 @@ function ComparisonPage() {
         </>}
     </div>;
 }
-function displayAnalyzerValue(value) {
-    if (value == null || value === '')
-        return 'Not available';
-    if (typeof value === 'object')
-        return JSON.stringify(value, null, 2);
-    return String(value);
-}
-
-function DecisionRecommendationPanel({ support }) {
-    if (!support) return null;
-    const title = support.decision === 'INSUFFICIENT_EVIDENCE'
-        ? 'Insufficient Evidence — Manual Review Required'
-        : `Recommended: ${support.decision}`;
-    const badgeClass = support.decision === 'ACCEPT' ? 'badge-green' : support.decision === 'REJECT' ? 'badge-red' : 'badge-amber';
-    return <section className="surface" style={{ padding: 16, margin: '14px 0' }} data-testid="decision-support-panel">
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}><h2 className="font-display" style={{ fontSize: 17, margin: 0 }}>Reviewer decision support</h2><span className={`badge ${badgeClass}`}>{title}</span></div>
-        <p style={{ fontSize: 12, lineHeight: 1.6 }}>{support.summary}</p>
-        <p className="muted" style={{ fontSize: 10 }}>Advisory evidence summary. The Reviewer makes and records the final decision.</p>
-        {support.reasons?.length > 0 ? <div style={{ display: 'grid', gap: 9 }}>{support.reasons.map((reason, index) => <article className="surface" style={{ padding: 11 }} key={`${reason.finding_id}-${index}`}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}><strong style={{ fontSize: 12 }}>{reason.title}</strong><span className="badge badge-amber">{reason.severity}</span><span className="muted" style={{ fontSize: 10 }}>{reason.criterion} · {reason.rule_type}</span></div>
-            <p style={{ fontSize: 11, margin: '7px 0' }}>{reason.explanation}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 9 }}><div><span className="eyebrow">Expected</span><p style={{ fontSize: 11, margin: '4px 0' }}>{displayAnalyzerValue(reason.expected)}</p></div><div><span className="eyebrow">Observed</span><p style={{ fontSize: 11, margin: '4px 0' }}>{displayAnalyzerValue(reason.actual)}</p></div><div><span className="eyebrow">Recommended correction</span><p style={{ fontSize: 11, margin: '4px 0' }}>{reason.recommended_action}</p></div></div>
-            {[...(reason.curriculum_evidence || []).map(row => ({ ...row, kind: 'Curriculum evidence' })), ...(reason.aicte_evidence || []).map(row => ({ ...row, kind: 'AICTE reference' }))].map((row, rowIndex) => <p key={`${row.kind}-${rowIndex}`} className="muted" style={{ fontSize: 10, margin: '7px 0 0' }}><strong>{row.kind}{row.page_number != null ? ` · p. ${row.page_number}` : ''}:</strong> {row.excerpt}</p>)}
-        </article>)}</div> : <p className="muted" style={{ fontSize: 11 }}>No failed or partial findings were returned. Confirm evidence and policy manually.</p>}
-    </section>;
-}
-
 function DesignerChanges({ notify, reviewer = false }) {
     const [requests, setRequests] = useState([]);
     const [statusFilter, setStatusFilter] = useState('All');

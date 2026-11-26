@@ -5,6 +5,7 @@ import test from 'node:test';
 
 const appSource = readFileSync(new URL('../src/app.jsx', import.meta.url), 'utf8');
 const analyzerSource = readFileSync(new URL('../src/components/reviewer-analyzer.jsx', import.meta.url), 'utf8');
+const queueSource = readFileSync(new URL('../src/components/reviewer-queue.jsx', import.meta.url), 'utf8');
 const serviceSource = readFileSync(
   new URL('../src/lib/mock-services.js', import.meta.url),
   'utf8',
@@ -119,7 +120,7 @@ test('reviewer analyzer is bound to an official submission ID', () => {
 });
 
 test('Reviewer Queue and Institute Portal use workflow APIs rather than demo submissions', () => {
-  const queue = appSource.slice(appSource.indexOf('function ReviewQueue'), appSource.indexOf('function ReviewSupportingPage'));
+  const queue = queueSource;
   const portal = appSource.slice(appSource.indexOf('function InstituteSubmissionPortal'), appSource.indexOf('function AdminUsers'));
   assert.match(queue, /mockService\.getPendingSubmissions\(\)/);
   assert.match(queue, /mockService\.decideSubmission/);
@@ -134,7 +135,8 @@ test('reviewer decision support is evidence based and records justified override
   assert.match(analyzerSource, /record\?\.aicte_evidence/);
   assert.match(analyzerSource, /record\?\.curriculum_evidence/);
   assert.match(analyzerSource, /recommendation !== matches && !justification\.trim\(\)/);
-  assert.match(appSource, /overrideRequired\('accept'\)/);
+  assert.match(queueSource, /recommendation !== action\.recommendation && !justification\.trim\(\)/);
+  assert.doesNotMatch(queueSource, /DecisionRecommendationPanel|decision-support-panel|Reviewer decision support/i);
   assert.match(serviceSource, /justification/);
   assert.match(analyzerSource, /submission-version-comparison/);
 });
@@ -198,7 +200,7 @@ test('admin activity and criteria pages read actual workflow and analyzer config
 });
 
 test('comparison and account settings use persisted records and preferences', () => {
-  const comparison = appSource.slice(appSource.indexOf('function ComparisonPage'), appSource.indexOf('function displayAnalyzerValue'));
+  const comparison = appSource.slice(appSource.indexOf('function ComparisonPage'), appSource.indexOf('function DesignerChanges'));
   const settings = appSource.slice(appSource.indexOf('function SettingsPage'), appSource.indexOf('function Modal'));
   assert.match(comparison, /mockService\.getImprovementHistory/);
   assert.doesNotMatch(comparison, /Reference Curriculum A|B\.Tech Artificial Intelligence v2\.1/);
