@@ -122,7 +122,7 @@ class LiveKnowledgeTests(TestCase):
             })
 
         store = MagicMock()
-        store.similarity_search.return_value = [
+        store.similarity_search_by_vector.return_value = [
             document("me", "approved"), document("someone-else", "approved"),
             document("me", "deleted"),
         ]
@@ -130,15 +130,17 @@ class LiveKnowledgeTests(TestCase):
         model.invoke.return_value = SimpleNamespace(content="Grounded reply")
         with patch.object(knowledge, "_owned_documents", return_value=[
             {"document_id": "approved", "filename": "mine.pdf", "live_analysis": {"overall_score": 42}},
-        ]), patch.object(knowledge, "retrieve_context", return_value=[]), patch.object(
+        ]), patch.object(knowledge, "get_embeddings"), patch.object(
+            knowledge, "get_aicte_vectorstore", return_value=SimpleNamespace(similarity_search_by_vector=lambda *_a, **_k: [])
+        ), patch.object(
             knowledge, "retrieve_supplement", return_value=[]
         ), patch.object(knowledge, "get_designer_vectorstore", return_value=store), patch.object(
-            knowledge, "get_llm", return_value=model
+            knowledge, "get_live_llm", return_value=model
         ):
             answer, sources = knowledge.answer_live_question("me", None, "Why is the score low?", "score", "en-in")
         self.assertEqual(answer, "Grounded reply")
         self.assertEqual(sources, [{"title": "approved", "page": 2, "kind": "Your curriculum"}])
-        self.assertEqual(store.similarity_search.call_args.kwargs["pre_filter"], {
+        self.assertEqual(store.similarity_search_by_vector.call_args.kwargs["pre_filter"], {
             "owner_id": {"$eq": "me"}, "document_id": {"$in": ["approved"]},
         })
         prompt = model.invoke.call_args.args[0][1].content

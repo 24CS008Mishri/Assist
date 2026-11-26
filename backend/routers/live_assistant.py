@@ -262,4 +262,5 @@ async def tavus_tool(request: Request):
     except HTTPException:
         raise
     except Exception as exc:
+        logger.warning("Curriculum evidence tool failed (%s)", type(exc).__name__)
         raise HTTPException(503, "Curriculum evidence is temporarily unavailable.") from exc

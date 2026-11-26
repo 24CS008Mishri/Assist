@@ -11,13 +11,13 @@ def supplement_collection():
     return get_aicte_database()[COLLECTION]
 
 
-def retrieve_supplement(query):
+def retrieve_supplement(embedding):
     collection = supplement_collection()
     document_ids = list(collection.distinct("document_id", {"kind": "manifest"}))
     if not document_ids:
         return []
     return _make_vectorstore(
         collection, get_settings().aicte_mongodb_vector_index
-    ).similarity_search(
-        query, k=6, pre_filter={"document_id": {"$in": document_ids}},
+    ).similarity_search_by_vector(
+        embedding, k=5, pre_filter={"document_id": {"$in": document_ids}},
     )
