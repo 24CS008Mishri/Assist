@@ -4,6 +4,7 @@ import test from 'node:test';
 
 
 const appSource = readFileSync(new URL('../src/app.jsx', import.meta.url), 'utf8');
+const analyzerSource = readFileSync(new URL('../src/components/reviewer-analyzer.jsx', import.meta.url), 'utf8');
 const serviceSource = readFileSync(
   new URL('../src/lib/mock-services.js', import.meta.url),
   'utf8',
@@ -15,82 +16,68 @@ const utilitySource = readFileSync(
 
 
 test('criterion cards are populated from the analyze endpoint response', () => {
-  assert.match(serviceSource, /\/api\/analyzer\/analyze\//);
-  assert.match(appSource, /mockService\.analyzeCurriculum/);
-  assert.match(appSource, /setReport\(result\)/);
-  assert.match(appSource, /criteria\.map\(\(criterion\)/);
-  assert.match(appSource, /criterion=\{criterion\}/);
-  assert.match(appSource, /function AnalyzerScoreTile\(\{ criterion, onClick \}\)/);
-  assert.match(appSource, /onClick=\{onClick\}/);
+  assert.match(serviceSource, /\/api\/workflow\/submissions\/.*\/analyze/);
+  assert.match(analyzerSource, /setReport\(result\)/);
+  assert.match(analyzerSource, /report\.criteria \|\| \[\]\)\.map/);
+  assert.match(analyzerSource, /<ScoreTile[^>]+criterion=\{criterion\}/);
+  assert.match(analyzerSource, /onClick=\{onClick\}/);
 });
 
 test('live issue cards use backend issues and no hardcoded analyzer values', () => {
-  assert.match(appSource, /report\.issues\.map\(\(issue\)/);
-  assert.match(appSource, /issue\.why_it_matters/);
-  assert.match(appSource, /issue\.recommended_solution/);
-  const liveAnalyzer = appSource.slice(
-    appSource.indexOf('function Analyzer({ notify })'),
-    appSource.indexOf('function DesignerChanges'),
-  );
-  assert.doesNotMatch(liveAnalyzer, /\['Structure', 89\]/);
-  assert.doesNotMatch(liveAnalyzer, /Resource quality is uneven/);
+  assert.match(analyzerSource, /report\.issues \|\| \[\]/);
+  assert.match(analyzerSource, /issue\.why_it_matters/);
+  assert.match(analyzerSource, /issue\.recommended_solution/);
+  assert.doesNotMatch(analyzerSource, /\['Structure', 89\]|Resource quality is uneven/);
 });
 
 test('unavailable LLM issues retain deterministic scoring presentation', () => {
-  assert.match(appSource, /if \(!report\.issues_available\)/);
-  assert.match(appSource, /AI recommendations are temporarily unavailable/);
-  assert.match(appSource, /deterministic scores and evidence are still available/);
+  assert.match(analyzerSource, /report\.issues_available/);
+  assert.match(analyzerSource, /Priority recommendations unavailable/);
+  assert.match(analyzerSource, /criterion scores and deterministic checks below are still available/);
 });
 
 test('modal exposes score, coverage, evidence, and not-evaluable exclusion', () => {
-  assert.match(appSource, /criterionCalculation\(criterion\)/);
-  assert.match(appSource, /coverageCalculation\(criterion\)/);
-  assert.match(appSource, /Evaluated score \(quality\)/);
-  assert.match(appSource, /Evaluation coverage \(evidence completeness\)/);
-  assert.match(appSource, /Required checks receive zero marks/);
-  assert.match(appSource, /SCOPE DEPENDENT/);
-  assert.match(appSource, /Missing reliable evidence for this check receives zero marks/);
-  assert.match(appSource, /AICTE Evidence/);
-  assert.match(appSource, /Curriculum Evidence/);
-  assert.match(appSource, /Excluded from score/);
-  assert.match(appSource, /it is not a failure/);
-  assert.match(appSource, /This check was excluded from scoring because sufficient evidence was not available/);
-  assert.match(appSource, /does not represent the complete B\.Tech CSE programme/);
-  assert.match(appSource, /Obtained marks/);
-  assert.match(appSource, /Maximum marks/);
+  assert.match(analyzerSource, /criterionCalculation\(criterion\)/);
+  assert.match(analyzerSource, /coverageCalculation\(criterion\)/);
+  assert.match(analyzerSource, /showModal\(\)/);
+  assert.match(analyzerSource, /Missing evidence can yield zero marks on required checks/);
+  assert.match(analyzerSource, /check\.availability_policy/);
+  assert.match(analyzerSource, /Excluded from score/);
+  assert.match(analyzerSource, /check\.obtained_marks/);
+  assert.match(analyzerSource, /check\.maximum_marks/);
 });
 
 test('scope and score presentation distinguishes partial and full curricula', () => {
-  assert.match(appSource, /Document Scope/);
-  assert.match(appSource, /documentScopeLabel\(report\.document_scope\)/);
-  assert.match(appSource, /overallScoreLabel\(report\)/);
+  assert.match(analyzerSource, /Document scope/);
+  assert.match(analyzerSource, /documentScopeLabel\(report\.document_scope\)/);
+  assert.match(analyzerSource, /overallScoreLabel\(report\)/);
   assert.match(utilitySource, /Evaluable Score/);
   assert.match(utilitySource, /Overall Score/);
-  assert.match(appSource, /Partial curriculum analyzed/);
-  assert.match(appSource, /Based on.*evaluation coverage/);
-  assert.match(appSource, /Limited evaluation coverage/);
-  assert.match(appSource, /criterionScoreLabel\(criterion\)/);
+  assert.match(analyzerSource, /evaluable parts of a partial curriculum/);
+  assert.match(analyzerSource, /Limited coverage/);
+  assert.match(analyzerSource, /criterionScoreLabel\(criterion\)/);
 });
 
 test('issue cards retain severity, related checks, evidence, and locations', () => {
-  assert.match(appSource, /issue\.severity/);
-  assert.match(appSource, /issue\.problem/);
-  assert.match(appSource, /issue\.related_check_ids/);
-  assert.match(appSource, /item\.page_number/);
-  assert.match(appSource, /item\.chunk_index/);
+  assert.match(analyzerSource, /issue\.severity/);
+  assert.match(analyzerSource, /issue\.problem/);
+  assert.match(analyzerSource, /issue\.related_check_ids/);
+  assert.match(analyzerSource, /item\.page_number/);
+  assert.match(analyzerSource, /Read original excerpt/);
+  assert.match(analyzerSource, /<blockquote>\{item\.excerpt\}<\/blockquote>/);
 });
 
 test('analyzer renders loading, empty, not-found, insufficient, and API error states', () => {
   for (const state of [
     'analyzer-loading',
-    'analyzer-empty',
+    'No pending submissions',
     'analyzer-not-found',
     'analyzer-ambiguous',
     'analyzer-invalid-metadata',
     'analyzer-insufficient',
     'analyzer-error',
   ]) {
-    assert.match(appSource, new RegExp(state));
+    assert.match(analyzerSource, new RegExp(state));
   }
 });
 
@@ -126,7 +113,7 @@ test('designer curricula remain private and the role no longer opens Analyzer', 
 test('reviewer analyzer is bound to an official submission ID', () => {
   assert.match(appSource, /path === '\/reviewer\/analyzer'/);
   assert.match(appSource, /submission_id/);
-  assert.match(appSource, /mockService\.analyzeSubmission\(submissionId\)/);
+  assert.match(analyzerSource, /mockService\.analyzeSubmission\(submissionId\)/);
   assert.match(appSource, /path\.startsWith\('\/designer\/analyzer'\)[\s\S]*?Unauthorized/);
 });
 
@@ -142,12 +129,13 @@ test('Reviewer Queue and Institute Portal use workflow APIs rather than demo sub
 });
 
 test('reviewer decision support is evidence based and records justified overrides', () => {
-  assert.match(appSource, /DecisionRecommendationPanel support=\{report\.decision_support\}/);
-  assert.match(appSource, /reason\.aicte_evidence/);
-  assert.match(appSource, /reason\.curriculum_evidence/);
+  assert.match(analyzerSource, /const support = report\.decision_support/);
+  assert.match(analyzerSource, /record\?\.aicte_evidence/);
+  assert.match(analyzerSource, /record\?\.curriculum_evidence/);
+  assert.match(analyzerSource, /recommendation !== matches && !justification\.trim\(\)/);
   assert.match(appSource, /overrideRequired\('accept'\)/);
   assert.match(serviceSource, /justification/);
-  assert.match(appSource, /submission-version-comparison/);
+  assert.match(analyzerSource, /submission-version-comparison/);
 });
 
 test('designer curriculum cards show database review requests linked to that curriculum', () => {
@@ -209,7 +197,7 @@ test('admin activity and criteria pages read actual workflow and analyzer config
 });
 
 test('comparison and account settings use persisted records and preferences', () => {
-  const comparison = appSource.slice(appSource.indexOf('function ComparisonPage'), appSource.indexOf('function Analyzer'));
+  const comparison = appSource.slice(appSource.indexOf('function ComparisonPage'), appSource.indexOf('function displayAnalyzerValue'));
   const settings = appSource.slice(appSource.indexOf('function SettingsPage'), appSource.indexOf('function Modal'));
   assert.match(comparison, /mockService\.getImprovementHistory/);
   assert.doesNotMatch(comparison, /Reference Curriculum A|B\.Tech Artificial Intelligence v2\.1/);
@@ -249,9 +237,8 @@ test('obsolete Screener and Designer Analyzer navigation are removed', () => {
 });
 
 test('missing uploaded AICTE references have an explicit non-scoring state', () => {
-  assert.match(appSource, /analyzer-aicte-reference-unavailable/);
-  assert.match(appSource, /AICTE Reference: Unavailable/);
-  assert.match(appSource, /AICTE-based score: Not Evaluable/);
-  assert.match(appSource, /aicte_reference_available === false/);
-  assert.match(appSource, /AICTE-based recommendations are unavailable/);
+  assert.match(analyzerSource, /analyzer-aicte-reference-unavailable/);
+  assert.match(analyzerSource, /AICTE reference unavailable/);
+  assert.match(analyzerSource, /unavailable \|\| report\.overall_score == null/);
+  assert.match(analyzerSource, /aicte_reference_available === false/);
 });
