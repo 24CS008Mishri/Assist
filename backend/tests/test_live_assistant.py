@@ -192,6 +192,33 @@ class LiveAssistantTests(TestCase):
         self.assertFalse(live.is_upload_inventory("Compare credits in my uploaded curricula"))
         self.assertFalse(live.is_upload_inventory("List subjects inside my selected curriculum"))
 
+    def test_improvement_tool_returns_promptly_if_work_exceeds_budget(self):
+        raw = json.dumps({
+            "name": "answer_curriculum_question", "conversation_id": "call1", "tool_call_id": "improvement",
+            "arguments": json.dumps({
+                "question": "Tell me what I can improve in that uploaded curriculum.",
+                "search_query": "curriculum improvement", "language": "en-in",
+            }),
+        }).encode()
+        sig = hmac.new(self.secret.encode(), raw, hashlib.sha256).hexdigest()
+        from time import sleep
+        with patch.object(live, "IMPROVEMENT_SECONDS", .01), patch.object(
+            live, "_answer_tool", side_effect=lambda *_: sleep(.1),
+        ):
+            response = self.client.post("/api/live-assistant/tavus-tool", content=raw,
+                                        headers={"X-Tavus-Signature": sig})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.text, live.EVIDENCE_UNAVAILABLE["en-in"])
+
+    def test_quick_recommendation_uses_the_extracted_credit_totals(self):
+        advice = knowledge.quick_recommendations([{"semesters": [
+            {"semester": 2, "stated_credits": 20, "sum_of_parsed_credits": 18},
+        ]}], "en-in")
+        self.assertIn("semester 2", advice)
+        self.assertIn("20 credits", advice)
+        self.assertIn("add up to 18", advice)
+        self.assertIsNone(knowledge.quick_recommendations([{"semesters": []}], "en-in"))
+
     def test_citations_and_end_are_scoped_to_verified_owner(self):
         sessions = MagicMock()
         sessions.find_one.return_value = None

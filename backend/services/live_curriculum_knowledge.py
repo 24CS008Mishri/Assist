@@ -1,20 +1,25 @@
 """Evidence retrieval for an authenticated Designer's live consultation."""
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, wait
 from functools import lru_cache
+from time import monotonic
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
+import groq
 from pymongo import timeout
 
 from backend.core.config import get_settings
 from backend.data.database import get_designer_collection, get_designer_metadata_collection
 from backend.services.live_reference_library import PRIVATE_INDEX, retrieve_supplement
 from backend.services.live_curriculum_review import curriculum_facts
+from backend.services.live_improvement import compact_review, is_improvement_request, quick_recommendations
 from backend.services.live_speech import avatar_gender, normalize_speech
 from backend.services.rag_service import get_aicte_vectorstore, get_designer_vectorstore, get_embeddings
 
 PRIVATE_SOURCE = "submitted_curriculum"
+_evidence_workers = ThreadPoolExecutor(max_workers=8, thread_name_prefix="vaani-evidence")
 WORKFLOW = (
     "Designers upload a PDF from Create Curriculum and see it in My Curricula. "
     "The AI Assistant is for text chat. Vaani is for live consultations."
@@ -29,6 +34,32 @@ def get_live_llm():
         temperature=0.15, max_tokens=min(settings.rag_answer_max_tokens, 1100),
         timeout=8, max_retries=0,
     )
+
+
+@lru_cache(maxsize=1)
+def _improvement_llm():
+    settings = get_settings()
+    reasoning = {"reasoning_effort": "low"} if "gpt-oss" in settings.groq_model else {}
+    return ChatGroq(
+        groq_api_key=settings.groq_api_key, model_name=settings.groq_model,
+        temperature=0.15, max_tokens=min(settings.rag_answer_max_tokens, 750),
+        timeout=3.5, max_retries=0, **reasoning,
+    )
+
+
+def _bounded(operation, seconds):
+    with timeout(seconds):
+        return operation()
+
+
+def _private_matches(embedding, owner_id, scope):
+    found = get_designer_vectorstore(PRIVATE_INDEX).similarity_search_by_vector(
+        embedding, k=5, pre_filter={"owner_id": {"$eq": owner_id},
+                                    "document_id": {"$in": list(dict.fromkeys(doc_id for doc_id, _ in scope))}},
+    )
+    return [doc for doc in found if doc.metadata.get("owner_id") == owner_id
+            and doc.metadata.get("source_type") == PRIVATE_SOURCE
+            and (doc.metadata.get("document_id"), doc.metadata.get("curriculum_id")) in scope]
 
 
 def _owned_documents(owner_id):
@@ -68,11 +99,12 @@ def _named_records(records, query):
 
 
 def answer_live_question(owner_id, document_id, question, search_query, language, *, curriculum_id=None,
-                         review_curriculum=False, previous_topic=""):
+                         review_curriculum=False, previous_topic="", deadline=None):
     # Read current registered metadata every turn. Deleted and in-progress
     # uploads cannot enter the authorization set, even during an open call.
-    review_curriculum = review_curriculum or bool(re.search(r"\b(compare|comparison|gap|compliance|missing|semester|credits?|requirements?|score)\b", search_query, re.I))
-    with timeout(6):
+    improvement = is_improvement_request(question, search_query)
+    review_curriculum = improvement or review_curriculum or bool(re.search(r"\b(compare|comparison|gap|compliance|missing|semester|credits?|requirements?|score)\b", search_query, re.I))
+    with timeout(2 if improvement else 6):
         records = {
             (row["document_id"], row.get("curriculum_id")): row
             for row in _owned_documents(owner_id) if row.get("document_id")
@@ -96,25 +128,33 @@ def answer_live_question(owner_id, document_id, question, search_query, language
         embedding_reference = get_embeddings().embed_query(reference_query)
     else:
         embedding_reference = embedding
-    with timeout(6):
-        official = [] if wrong_pdf else retrieve_supplement(embedding_reference)
-        if not wrong_pdf:
-            official.extend(get_aicte_vectorstore().similarity_search_by_vector(embedding_reference, k=4))
-        private = []
-        if scope and not wrong_pdf:
-            matches = get_designer_vectorstore(PRIVATE_INDEX).similarity_search_by_vector(
-                embedding, k=5,
-                pre_filter={
-                    "owner_id": {"$eq": owner_id},
-                    "document_id": {"$in": list(dict.fromkeys(doc_id for doc_id, _ in scope))},
-                },
-            )
-            private = [
-                doc for doc in matches
-                if doc.metadata.get("owner_id") == owner_id
-                and doc.metadata.get("source_type") == PRIVATE_SOURCE
-                and (doc.metadata.get("document_id"), doc.metadata.get("curriculum_id")) in scope
-            ]
+    candidates = ([focal] if focal else named[:2]) if review_curriculum and not wrong_pdf else []
+    parsed = None
+    if improvement and not wrong_pdf:
+        # Each retrieval has its own database budget. Starting them together keeps
+        # optional evidence from blocking the spoken answer when Atlas is slow.
+        jobs = {
+            "official": lambda: get_aicte_vectorstore().similarity_search_by_vector(embedding_reference, k=4),
+            "supplement": lambda: retrieve_supplement(embedding_reference),
+            "private": lambda: _private_matches(embedding, owner_id, scope) if scope else [],
+            "parsed": lambda: [curriculum_facts(owner_id, row) for row in candidates],
+        }
+        futures = {name: _evidence_workers.submit(_bounded, job, 2.3) for name, job in jobs.items()}
+        budget = min(2.5, max(0, deadline - monotonic() - 3.8)) if deadline else 2.5
+        done, pending = wait(futures.values(), timeout=budget)
+        for future in pending:
+            future.cancel()
+        result = {name: task.result() for name, task in futures.items()
+                  if task in done and task.exception() is None}
+        official = [*result.get("official", []), *result.get("supplement", [])]
+        private = result.get("private", [])
+        parsed = result.get("parsed", [])
+    else:
+        with timeout(6):
+            official = [] if wrong_pdf else retrieve_supplement(embedding_reference)
+            if not wrong_pdf:
+                official.extend(get_aicte_vectorstore().similarity_search_by_vector(embedding_reference, k=4))
+            private = _private_matches(embedding, owner_id, scope) if scope and not wrong_pdf else []
 
     documents = [("AICTE reference", doc) for doc in official
                  if doc.metadata.get("source_type") in (None, "aicte_reference")
@@ -132,17 +172,13 @@ def answer_live_question(owner_id, document_id, question, search_query, language
             "branch": m.get("branch"), "version": m.get("version"), "excerpt": doc.page_content[:950],
         })
     reviews = []
-    if review_curriculum and not wrong_pdf:
-        if focal:
-            candidates = [focal]
-        else:
-            candidates = named[:2]
+    if parsed is None:
         with timeout(3):
-            for row in candidates:
-                summary, pages = curriculum_facts(owner_id, row)
-                reviews.append(summary)
-                sources.extend({"title": row["filename"], "page": page, "kind": "Your curriculum"}
-                               for page in pages[:8])
+            parsed = [curriculum_facts(owner_id, row) for row in candidates]
+    for row, (summary, pages) in zip(candidates, parsed):
+        reviews.append(summary)
+        sources.extend({"title": row["filename"], "page": page, "kind": "Your curriculum"}
+                       for page in pages[:8])
     facts = {
         "question": question,
         "language": language,
@@ -159,7 +195,18 @@ def answer_live_question(owner_id, document_id, question, search_query, language
         ],
         "portal_workflow": WORKFLOW,
     }
-    response = get_live_llm().invoke([
+    if improvement:
+        facts["curriculum_tables"] = [compact_review(review) for review in reviews]
+        facts["sources"] = [
+            {**excerpt, "excerpt": excerpt["excerpt"][:520]}
+            for kind in ("Your curriculum", "AICTE reference")
+            for excerpt in [item for item in excerpts if item["kind"] == kind][:3]
+        ]
+        if document_check:
+            facts["uploaded_document_check"] = {
+                **document_check, "opening_excerpt": document_check["opening_excerpt"][:450],
+            }
+    messages = [
         SystemMessage(content=(
             f"Speak as a warm, experienced curriculum consultant with {avatar_gender()} first-person "
             "grammar. Use the language indicated by the language field or its natural mix with English. "
@@ -180,6 +227,8 @@ def answer_live_question(owner_id, document_id, question, search_query, language
             "For a review compare the owned courses, semester and category credits with explicit "
             "passages for the applicable programme and edition. State the difference and why it "
             "matters. Compare course content and equivalent names before suggesting a missing subject. "
+            "For improvements, give two specific changes grounded in the upload and a brief reason, within about sixty spoken words. "
+            "If only some sources loaded, describe what you could verify and avoid claims about the rest. "
             "Distinguish formal requirements, model guidance, drafts and your recommendations. "
             "Only call a subject missing if the uploaded course inventory is demonstrably complete "
             "and the applicable reference supports that conclusion. Otherwise say it was not found "
@@ -189,10 +238,22 @@ def answer_live_question(owner_id, document_id, question, search_query, language
             "references are shown separately. Mention the edition or a page naturally if helpful."
         )),
         HumanMessage(content=json.dumps(facts, ensure_ascii=False, default=str)),
-    ])
-    answer = response.content
+    ]
+    fallback = quick_recommendations(reviews, language) if improvement else None
+    try:
+        if fallback and deadline and deadline - monotonic() < 3.8:
+            answer = fallback
+        else:
+            model = _improvement_llm() if improvement else get_live_llm()
+            answer = model.invoke(messages).content
+    except groq.APIError:
+        if not fallback:
+            raise
+        answer = fallback
     if not isinstance(answer, str) or not answer.strip():
-        raise RuntimeError("No spoken reply was generated")
+        if not fallback:
+            raise RuntimeError("No spoken reply was generated")
+        answer = fallback
     unique_sources = [dict(items) for items in dict.fromkeys(tuple(s.items()) for s in sources)]
     spoken = normalize_speech(answer, language) if language in {"en-in", "hi", "gu", "mixed"} else " ".join(answer.split())
     return spoken, unique_sources

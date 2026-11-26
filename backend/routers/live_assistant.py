@@ -25,6 +25,7 @@ from backend.routers import live_transcripts
 from backend.services.live_curriculum_knowledge import PRIVATE_SOURCE, answer_live_question, get_live_llm
 from backend.services import sarvam_voice
 from backend.services.live_upload_inventory import is_upload_inventory, upload_inventory
+from backend.services.live_improvement import is_improvement_request
 
 router = APIRouter(prefix="/api/live-assistant", tags=["live-assistant"])
 router.include_router(live_transcripts.router)
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 LANGUAGES = ("en-in", "hi", "gu")
 MAX_CALL_SECONDS = 3600
 EVIDENCE_SECONDS = 20
+IMPROVEMENT_SECONDS = 8.5
 GREETINGS = {
     "en-in": "Hello, I'm Vaani. How could I help you?",
     "hi": "नमस्ते, मैं वाणी हूँ। मैं आपकी कैसे मदद कर सकती हूँ?",
@@ -395,10 +397,12 @@ def _answer_tool(event: ToolRequest, arguments: ToolArguments, deadline: float):
     if arguments.list_uploads or is_upload_inventory(arguments.question, arguments.search_query):
         answer, sources = upload_inventory(row["_id"], arguments.language, arguments.question)
     else:
+        improvement = is_improvement_request(arguments.question, arguments.search_query)
         answer, sources = answer_live_question(
             row["_id"], row.get("document_id"), arguments.question,
             arguments.search_query, arguments.language, curriculum_id=row.get("curriculum_id"),
             review_curriculum=arguments.review_curriculum,
+            **({"deadline": deadline - .35} if improvement else {}),
         )
     if monotonic() >= deadline:
         raise TimeoutError("Evidence deadline exceeded")
@@ -431,9 +435,12 @@ async def tavus_tool(request: Request):
     except ValidationError as exc:
         raise HTTPException(422, "Invalid curriculum tool arguments.") from exc
     try:
-        with fail_after(EVIDENCE_SECONDS):
+        budget = min(IMPROVEMENT_SECONDS, EVIDENCE_SECONDS) if is_improvement_request(
+            arguments.question, arguments.search_query,
+        ) else EVIDENCE_SECONDS
+        with fail_after(budget):
             answer = await to_thread.run_sync(
-                _answer_tool, event, arguments, monotonic() + EVIDENCE_SECONDS,
+                _answer_tool, event, arguments, monotonic() + budget,
                 abandon_on_cancel=True,
             )
         return PlainTextResponse(answer, headers={"Cache-Control": "no-store"})

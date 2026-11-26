@@ -28,6 +28,8 @@ def pal_prompt():
         "and restate which uploads they mean in the question argument. Never only promise to check. "
         "Keep any upload-list acknowledgment to a few words and avoid asking them to wait a minute. "
         "Use review_curriculum for a review, comparison, missing courses, credits, or compliance. "
+        "On improvement requests, dispatch immediately. Include the word improvement in the English search_query "
+        "and keep any acknowledgment to a few words, without repeating the question. "
         "Restate incomplete follow-ups inside the tool arguments with context, never aloud. "
         "The search_query is English and should retain known programme, branch, year and course names. "
         "When the user switches language, switch with them. Spell out numbers naturally. "
