@@ -199,7 +199,9 @@ class LiveKnowledgeTests(TestCase):
             knowledge, "retrieve_supplement", return_value=[]
         ), patch.object(knowledge, "get_designer_vectorstore", return_value=store), patch.object(
             knowledge, "get_live_llm", return_value=model
-        ), patch.object(knowledge, "curriculum_facts", return_value=({"sum_of_extracted_programme_credits": 42}, [3])) as review:
+        ), patch.object(knowledge, "_document_check", return_value=None), patch.object(
+            knowledge, "curriculum_facts", return_value=({"sum_of_extracted_programme_credits": 42}, [3])
+        ) as review:
             answer, sources = knowledge.answer_live_question("me", None, "What are the credit gaps?", "credits", "en-in")
         self.assertEqual(answer, "Grounded reply")
         self.assertEqual(sources, [{"title": "approved", "page": 2, "kind": "Your curriculum"},

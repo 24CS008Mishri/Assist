@@ -14,6 +14,8 @@ function closeRoom(id) {
 export default function LiveCurriculumAssistant() {
   const [ready, setReady] = useState(false);
   const [language, setLanguage] = useState('en-in');
+  const [voice, setVoice] = useState('tavus');
+  const [sarvamAvailable, setSarvamAvailable] = useState(false);
   const [documentKey, setDocumentKey] = useState('');
   const [documents, setDocuments] = useState([]);
   const [room, setRoom] = useState(null);
@@ -117,6 +119,7 @@ export default function LiveCurriculumAssistant() {
     try {
       const current = await request(`${api}/current`);
       setExistingId(current.id);
+      setSarvamAvailable(Boolean(current.sarvam_available));
       setDocuments((await request('/api/documents')).filter((item) => (
         item.source_type === 'submitted_curriculum' && item.status === 'Active' && item.document_id && item.curriculum_id
       )));
@@ -137,7 +140,7 @@ export default function LiveCurriculumAssistant() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         language, document_id: documentId, curriculum_id: curriculumId, resume_topic: resumeTopic,
-        transcript_id: transcriptId,
+        transcript_id: transcriptId, voice,
       }),
     });
   }
@@ -252,11 +255,24 @@ export default function LiveCurriculumAssistant() {
                   })}
                 </select>
               </label>
+              {sarvamAvailable && <label className="label">Voice
+                <select className="field" value={voice} disabled={busy} onChange={event => {
+                  setVoice(event.target.value);
+                  if (event.target.value === 'tavus' && !['en-in', 'hi', 'gu'].includes(language)) setLanguage('en-in');
+                }}>
+                  <option value="tavus">Tavus</option>
+                  <option value="sarvam">Sarvam · Kavya</option>
+                </select>
+              </label>}
               <label className="label">Opening language
                 <select className="field" value={language} onChange={event => setLanguage(event.target.value)} disabled={busy}>
                   <option value="en-in">English (India)</option>
                   <option value="hi">Hindi</option>
                   <option value="gu">Gujarati</option>
+                  {voice === 'sarvam' && Object.entries({
+                    bn: 'Bengali', ta: 'Tamil', te: 'Telugu', kn: 'Kannada', ml: 'Malayalam',
+                    mr: 'Marathi', pa: 'Punjabi', od: 'Odia',
+                  }).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
                 </select>
               </label>
               {existingId ? (
@@ -268,7 +284,10 @@ export default function LiveCurriculumAssistant() {
               )}
               {!ready && !busy && <button className="btn" type="button" onClick={open}>Retry connection</button>}
             </form>
-            <p className="muted virtual-privacy">Tavus processes your voice and any camera video you enable. The portal saves a text transcript for you to review.</p>
+            <p className="muted virtual-privacy">
+              {voice === 'sarvam' ? 'Sarvam processes your microphone audio. Tavus renders Vaani and handles the video call.' : 'Tavus processes your voice and any camera video you enable.'}{' '}
+              The portal saves a text transcript for you to review.
+            </p>
           </div>
         </div>
       )}

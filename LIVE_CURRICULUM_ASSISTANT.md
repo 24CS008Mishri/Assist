@@ -6,6 +6,12 @@ Vaani acknowledges a curriculum question aloud before checking the evidence. The
 
 Open **Transcript history** to reopen a past consultation. The portal saves completed text turns to the Designer database as they arrive, using the same entry across replacement rooms. Access is limited to the Designer who started the consultation. The history contains text only and begins with new consultations.
 
+## Sarvam voice
+
+Set a valid `SARVAM_API_KEY` in `Assist/.env`. From `Assist`, run `python -m backend.setup_sarvam_voice --create-pal` to check Bulbul and create an Echo PAL using Vaani’s existing face. Set the returned `TAVUS_SARVAM_PAL_ID` and restart FastAPI. Choose **Sarvam · Kavya** before starting a consultation. **Tavus** remains available from the same selector.
+
+The browser detects speech pauses and sends one audio turn at a time to the authenticated backend. Saaras v4 transcribes code-mixed speech, Groq and Atlas answer, and Bulbul v3 sends audio through Tavus Echo for lip synchronization. This path sends microphone audio to Sarvam and requires browser AudioWorklet support. Languages are limited to the shared Saaras and Bulbul coverage. The portal stores transcript text.
+
 ## Setup
 
 1. **Local Designer sign-in.** With the portal and API bound to loopback, set `ENABLE_LOCAL_DESIGNER_VIDEO_LOGIN=true` and open `http://127.0.0.1:5173/login`. Use the existing Designer email and password in the normal sign-in form. The server issues a short-lived session for the same curriculum owner ID after a successful local login. No account enrollment is needed. This switch is off by default and intended only for the loopback development portal. A shared deployment should keep it off and supply verified identity through its authentication middleware. When either authenticated mode is enabled, demo Designer headers cannot access private Designer routes. Other demo roles continue through the existing login.

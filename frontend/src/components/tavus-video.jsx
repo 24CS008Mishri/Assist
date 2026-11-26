@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { sarvamCall } from '@/lib/sarvam-call';
 import { BookOpen, Captions, Maximize, MessageSquare, Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react';
 
 function useMediaTrack(element, track, onBlocked) {
@@ -34,6 +35,7 @@ export default function TavusVideo({ room, sources, onEnd, reconnecting, reconne
   const handlers = useRef({ onDisconnected, onTopic, onTurn });
   const microphoneEnabled = useRef(true);
   const cameraEnabled = useRef(false);
+  const hasJoinedRoom = useRef(false);
   const [status, setStatus] = useState('Connecting…');
   const [tracks, setTracks] = useState({});
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
@@ -50,6 +52,7 @@ export default function TavusVideo({ room, sources, onEnd, reconnecting, reconne
   useEffect(() => {
     let disposed = false;
     let call;
+    let sarvam;
     let joined = false;
     let departureTimer;
     const seenUtterances = new Set();
@@ -57,10 +60,23 @@ export default function TavusVideo({ room, sources, onEnd, reconnecting, reconne
     setTracks({});
     setPartial(null);
 
+    function appendTurn(role, text, key) {
+      if (role === 'user') handlers.current.onTopic(text);
+      handlers.current.onTurn({ role, text });
+      setPartial(null);
+      setTranscript(previous => [...previous.slice(-99), { key, role, text }]);
+    }
+
     function syncTracks() {
       if (disposed) return;
       const { local, ...remote } = call.participants();
       const avatar = Object.values(remote)[0];
+      if (sarvam) {
+        const microphone = availableTrack(local, 'audio');
+        sarvam.setEnabled(Boolean(microphone));
+        void sarvam.attach(microphone);
+        if (avatar?.session_id) void sarvam.greet(avatar.session_id, hasJoinedRoom.current);
+      }
       setTracks({
         avatarVideo: availableTrack(avatar, 'video'),
         avatarAudio: availableTrack(avatar, 'audio'),
@@ -72,6 +88,7 @@ export default function TavusVideo({ room, sources, onEnd, reconnecting, reconne
     }
 
     function receiveUtterance(event) {
+      if (room.voice === 'sarvam') return;
       if (disposed || !event.fromId || !call.participants()[event.fromId] || call.participants()[event.fromId].local) return;
       const message = event.data;
       if (message?.conversation_id !== room.id) return;
@@ -88,10 +105,7 @@ export default function TavusVideo({ room, sources, onEnd, reconnecting, reconne
       const key = `${room.id}:${speaker}:${message.inference_id ?? message.timestamp ?? ''}:${text}`;
       if (seenUtterances.has(key)) return;
       seenUtterances.add(key);
-      if (speaker === 'user') handlers.current.onTopic(text);
-      handlers.current.onTurn({ role: speaker, text });
-      setPartial(null);
-      setTranscript(previous => [...previous.slice(-99), { key, role: speaker, text }]);
+      appendTurn(speaker, text, key);
     }
 
     function fail() {
@@ -109,6 +123,15 @@ export default function TavusVideo({ room, sources, onEnd, reconnecting, reconne
         url.search = '';
         call = Daily.createCallObject();
         callRef.current = call;
+        if (room.voice === 'sarvam') {
+          sarvam = sarvamCall({
+            call, room, onNotice: setNotice,
+            onTurn: (role, text) => {
+              if (!disposed) appendTurn(role, text, crypto.randomUUID());
+              hasJoinedRoom.current = true;
+            },
+          });
+        }
         call.on('joined-meeting', () => {
           joined = true;
           if (!disposed) setStatus('Connected');
@@ -153,6 +176,7 @@ export default function TavusVideo({ room, sources, onEnd, reconnecting, reconne
       disposed = true;
       window.clearTimeout(departureTimer);
       callRef.current = null;
+      sarvam?.stop();
       if (call) void call.destroy().catch(() => {});
     };
   }, [room.id, room.embed_url]);
