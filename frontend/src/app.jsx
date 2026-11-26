@@ -1,7 +1,14 @@
-﻿import { useEffect, useState } from 'react';
+﻿﻿import { useEffect, useState } from 'react';
 import { Link, Router as WouterRouter, useLocation } from 'wouter';
 import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, Menu, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, Sparkles, Trash2, Upload, UserCog, Users, X } from 'lucide-react';
 import { mockService } from '@/lib/mock-services';
+import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { Link, Router as WouterRouter, useLocation } from 'wouter';
+import LiveCurriculumAssistant from '@/components/live-curriculum-assistant';
+import { logoutVerifiedDesigner } from '@/lib/live-assistant-api';
+import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, Menu, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UserCog, Users, Video, X } from 'lucide-react';
+import { analyzerScoreHistory, mockChanges, mockCurricula, mockService, mockUsers, sourceCards } from '@/lib/mock-services';
 import { analyzerDocumentHref, analyzerDocumentKey, checkStatusLabel, coverageCalculation, criterionCalculation, criterionScoreLabel, documentScopeLabel, hasLowEvaluationCoverage, isPartialCurriculum, isPartialScopeExclusion, overallScoreLabel, requestedAnalyzerDocument, submittedCurriculumDocuments } from '@/lib/analyzer-utils';
 const roles = {
     admin: { label: 'AICTE Admin', short: 'Admin', base: '/admin/dashboard', description: 'Authoritative governance and national oversight', icon: Landmark },
@@ -32,7 +39,7 @@ const navByRole = {
     ],
     designer: [
         { label: 'Dashboard', href: '/designer/dashboard', icon: LayoutDashboard }, { label: 'My Curricula', href: '/designer/curricula', icon: FolderKanban },
-        { label: 'Create Curriculum', href: '/designer/create', icon: Plus, permission: 'curricula.create' }, { label: 'AI Assistant', href: '/designer/assistant', icon: Bot, permission: 'ai.use' },
+        { label: 'Create Curriculum', href: '/designer/create', icon: Plus, permission: 'curricula.create' }, { label: 'AI Assistant', href: '/designer/assistant', icon: Bot, permission: 'ai.use' }, { label: 'Vaani', href: '/designer/virtual-assistant', icon: Video, permission: 'ai.use' },
         { label: 'Resource Assistant', href: '/designer/resources', icon: BookMarked, permission: 'resources.use' }, { label: 'Curriculum Comparison', href: '/designer/comparison', icon: Network, permission: 'comparison.use' },
         { label: 'Change Requests', href: '/designer/changes', icon: RefreshCw },
         { label: 'Improvement Tracker', href: '/designer/improvements', icon: Activity, permission: 'curricula.update' },
@@ -77,11 +84,21 @@ function Portal() {
         // The account recordâ€”not a client-selected roleâ€”determines the workspace.
         const next = await mockService.login(email, password);
         localStorage.setItem('aicte-demo-session', JSON.stringify(next));
-        setSession(next);
+        flushSync(() => setSession(next));
         setSidebarOpen(false);
         setLocation(roles[next.role].base);
     };
-    const logout = () => { localStorage.removeItem('aicte-demo-session'); setSession(null); setLocation('/login'); };
+    const logout = async () => {
+        try {
+            if (session?.verified) await logoutVerifiedDesigner();
+        } catch (failure) {
+            notify(failure.message);
+            return;
+        }
+        localStorage.removeItem('aicte-demo-session');
+        setSession(null);
+        setLocation('/login');
+    };
     if (location === '/login' || location === '/signup' || location === '/forgot-password' || location === '/reset-password') {
         return <AuthPage mode={location.slice(1)} onLogin={login} />;
     }
@@ -182,6 +199,8 @@ function PageContent({ role, path, notify }) {
         return <DesignerCurricula notify={notify} />;
     if (path === '/designer/create')
         return <CreateWizard notify={notify} />;
+    if (path === '/designer/virtual-assistant')
+        return <LiveCurriculumAssistant />;
     if (path === '/designer/assistant')
         return <RagAssistantPage notify={notify} />;
     if (path === '/designer/resources')
@@ -308,6 +327,8 @@ function DashboardActions({ role }) {
         designer: [
             ['Upload Curriculum PDF', 'Start the next governed curriculum version from a PDF.', Upload, '/designer/create'],
             ['Ask AI Assistant', 'Get evidence-backed help for outcomes, structure and coverage.', Bot, '/designer/assistant'],
+            ['Vaani', 'Start a live curriculum consultation.', Video, '/designer/virtual-assistant'],
+            ['Analyze Curriculum', 'Find problems and apply defined solutions before submission.', BarChart3, '/designer/analyzer'],
         ],
         institute: [
             ['Portal Upload', 'Submit a prepared institutional curriculum for Reviewer Compliance.', Upload, '/institute/submit'],

@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from backend.models.schemas import LoginRequest
 from backend.core.auth import AuthenticatedUser, require_authenticated_user, require_role
 from backend.services.workflow_service import authenticate_demo_user, list_users, public_user
+
+from backend.core.designer_sessions import start_local_designer_session
 
 
 router = APIRouter(prefix="/api", tags=["demo"])
@@ -55,3 +57,6 @@ def login(request: LoginRequest):
         **public_user(user),
         "organization": next((account.get("organization") for account in USERS if account["id"] == user["user_id"]), ""),
     }
+    if start_local_designer_session(user, http_request, response):
+        profile.update(id=user["id"], verified=True)
+    return profile

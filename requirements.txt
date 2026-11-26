@@ -1,4 +1,6 @@
 fastapi
+anyio>=4.1
+httpx
 uvicorn[standard]
 python-multipart
 python-dotenv
@@ -10,3 +12,4 @@ langchain-huggingface
 langchain-mongodb
 langchain-groq
 sentence-transformers
+indic-numtowords==1.1.0

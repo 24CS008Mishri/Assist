@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import get_settings
-from backend.routers import analyzer, demo, rag, workflow
+from backend.routers import analyzer, demo, designer_auth, live_assistant, rag,workflow
 
 
 settings = get_settings()
@@ -25,6 +25,8 @@ app.include_router(rag.router)
 app.include_router(demo.router)
 app.include_router(analyzer.router)
 app.include_router(workflow.router)
+app.include_router(live_assistant.router)
+app.include_router(designer_auth.router)
 
 @app.get("/")
 def read_root():
