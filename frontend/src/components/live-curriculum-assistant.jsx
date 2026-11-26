@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Video, X } from 'lucide-react';
+import { Video } from 'lucide-react';
 import { liveRequest as request } from '@/lib/live-assistant-api';
 import './live-curriculum-assistant.css';
 import TavusVideo from './tavus-video';
@@ -11,7 +11,7 @@ function closeRoom(id) {
 }
 
 export default function LiveCurriculumAssistant() {
-  const [expanded, setExpanded] = useState(false);
+  const [ready, setReady] = useState(false);
   const [language, setLanguage] = useState('en-in');
   const [documentKey, setDocumentKey] = useState('');
   const [documents, setDocuments] = useState([]);
@@ -70,7 +70,7 @@ export default function LiveCurriculumAssistant() {
   }, [room]);
 
   async function open() {
-    setExpanded(true);
+    setReady(false);
     setBusy(true);
     setError('');
     try {
@@ -79,12 +79,15 @@ export default function LiveCurriculumAssistant() {
       setDocuments((await request('/api/documents')).filter((item) => (
         item.source_type === 'submitted_curriculum' && item.status === 'Active' && item.document_id && item.curriculum_id
       )));
+      setReady(true);
     } catch (failure) {
-      setError(failure.message);
+      setError(failure.status === 401 ? 'Sign out and sign back in to refresh your Designer session.' : failure.message);
     } finally {
       setBusy(false);
     }
   }
+
+  useEffect(() => { void open(); }, []);
 
   async function start(event) {
     event.preventDefault();
@@ -135,54 +138,49 @@ export default function LiveCurriculumAssistant() {
   }
 
   return (
-    <section id="live-consultation" className="surface live-assistant" aria-labelledby="live-assistant-heading">
-      <div className="live-assistant-heading">
+    <section className="virtual-assistant" aria-labelledby="virtual-assistant-heading">
+      <header className="virtual-header">
         <div>
-          <h2 id="live-assistant-heading" className="font-display">AI Curriculum Assistant</h2>
-          <p className="muted">Discuss AICTE guidance, your curriculum, and Analyzer findings by video.</p>
+          <h1 id="virtual-assistant-heading" className="font-display">Virtual Assistant</h1>
+          <p>Live curriculum consultation with an AI-generated consultant.</p>
         </div>
-        {!expanded && <button className="btn btn-primary" type="button" onClick={open}><Video size={16} /> Set up a video call</button>}
-        {expanded && !room && !busy && !existingId && (
-          <button className="btn icon-btn" type="button" onClick={() => setExpanded(false)} aria-label="Close call setup"><X size={16} /></button>
-        )}
-      </div>
-      {expanded && !room && !existingId && (
-        <form className="live-assistant-controls" onSubmit={start}>
-          <label className="label">Curriculum
-            <select className="field" value={documentKey} onChange={(event) => setDocumentKey(event.target.value)} disabled={busy}>
-              <option value="">Search my curricula as needed</option>
-              {documents.map((document) => {
-                const key = JSON.stringify([document.document_id, document.curriculum_id]);
-                return <option key={key} value={key}>{document.filename} · {document.curriculum_id}</option>;
-              })}
-            </select>
-          </label>
-          <label className="label">Opening language
-            <select className="field" value={language} onChange={(event) => setLanguage(event.target.value)} disabled={busy}>
-              <option value="en-in">English (India)</option>
-              <option value="hi">Hindi</option>
-              <option value="gu">Gujarati</option>
-            </select>
-          </label>
-          <button type="submit" className="btn btn-primary" disabled={busy}><Video size={16} /> {busy ? 'Please wait…' : 'Start video call'}</button>
-          <p className="muted live-assistant-note">Tavus processes your voice and any camera video you enable. You can switch languages during the call.</p>
-        </form>
-      )}
-      {error && expanded && <p className="live-assistant-error" role="alert">{error}</p>}
-      {existingId && !room && (
-        <button type="button" className="btn btn-danger" onClick={end} disabled={busy}>End previous consultation</button>
-      )}
-      {room && (
-        <>
-          <TavusVideo embedUrl={room.embed_url} />
-          <button type="button" className="btn btn-danger" onClick={end}>End consultation</button>
-          {!!sources.length && <div className="live-assistant-sources" aria-live="polite">
-            <h3>Evidence retrieved for the latest question</h3>
-            <ul>{sources.map((source) => (
-              <li key={JSON.stringify(source)}>{source.title}{source.page ? ` · page ${source.page}` : ''} <span className="muted">({source.kind})</span></li>
-            ))}</ul>
-          </div>}
-        </>
+      </header>
+      {error && <p className="virtual-error" role="alert">{error}</p>}
+      {room ? <TavusVideo key={room.id} room={room} sources={sources} onEnd={end} /> : (
+        <div className="virtual-lobby">
+          <div className="virtual-setup surface">
+            <Video size={26} aria-hidden="true" />
+            <h2 className="font-display">Start a consultation</h2>
+            <p className="muted">Review your courses, credits and semester structure against AICTE references.</p>
+            <form className="virtual-setup-form" onSubmit={start}>
+              <label className="label">Curriculum
+                <select className="field" value={documentKey} onChange={event => setDocumentKey(event.target.value)} disabled={busy}>
+                  <option value="">Choose in conversation</option>
+                  {documents.map(document => {
+                    const key = JSON.stringify([document.document_id, document.curriculum_id]);
+                    return <option key={key} value={key}>{document.filename} · {document.curriculum_id}</option>;
+                  })}
+                </select>
+              </label>
+              <label className="label">Opening language
+                <select className="field" value={language} onChange={event => setLanguage(event.target.value)} disabled={busy}>
+                  <option value="en-in">English (India)</option>
+                  <option value="hi">Hindi</option>
+                  <option value="gu">Gujarati</option>
+                </select>
+              </label>
+              {existingId ? (
+                <button type="button" className="btn btn-danger" onClick={end} disabled={busy}>End previous consultation</button>
+              ) : (
+                <button type="submit" className="btn btn-primary" disabled={busy || !ready}>
+                  <Video size={16} /> {busy ? 'Please wait…' : 'Start video call'}
+                </button>
+              )}
+              {!ready && !busy && <button className="btn" type="button" onClick={open}>Retry connection</button>}
+            </form>
+            <p className="muted virtual-privacy">Tavus processes your voice and any camera video you enable. You can switch languages during the call.</p>
+          </div>
+        </div>
       )}
     </section>
   );

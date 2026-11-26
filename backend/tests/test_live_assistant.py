@@ -97,7 +97,8 @@ class LiveAssistantTests(TestCase):
             approved = self.client.post("/api/live-assistant/tavus-tool", content=raw,
                                         headers={"X-Tavus-Signature": sig})
         self.assertEqual(approved.text, "Spoken answer")
-        answer.assert_called_once_with("verified-owner", "selected", "Explain credit gaps", "CSE credit gaps", "en-in", curriculum_id=None)
+        answer.assert_called_once_with("verified-owner", "selected", "Explain credit gaps", "CSE credit gaps", "en-in",
+                                       curriculum_id=None, review_curriculum=False)
         self.assertEqual(sessions.find_one.call_args.args[0]["state"], "active")
 
     def test_citations_and_end_are_scoped_to_verified_owner(self):
@@ -129,21 +130,23 @@ class LiveKnowledgeTests(TestCase):
         model = MagicMock()
         model.invoke.return_value = SimpleNamespace(content="Grounded reply")
         with patch.object(knowledge, "_owned_documents", return_value=[
-            {"document_id": "approved", "filename": "mine.pdf", "live_analysis": {"overall_score": 42}},
+            {"document_id": "approved", "filename": "mine.pdf", "programme": "B.Tech", "branch": "CSE"},
         ]), patch.object(knowledge, "get_embeddings"), patch.object(
             knowledge, "get_aicte_vectorstore", return_value=SimpleNamespace(similarity_search_by_vector=lambda *_a, **_k: [])
         ), patch.object(
             knowledge, "retrieve_supplement", return_value=[]
         ), patch.object(knowledge, "get_designer_vectorstore", return_value=store), patch.object(
             knowledge, "get_live_llm", return_value=model
-        ):
-            answer, sources = knowledge.answer_live_question("me", None, "Why is the score low?", "score", "en-in")
+        ), patch.object(knowledge, "curriculum_facts", return_value=({"sum_of_extracted_programme_credits": 42}, [3])) as review:
+            answer, sources = knowledge.answer_live_question("me", None, "What are the credit gaps?", "credits", "en-in")
         self.assertEqual(answer, "Grounded reply")
-        self.assertEqual(sources, [{"title": "approved", "page": 2, "kind": "Your curriculum"}])
+        self.assertEqual(sources, [{"title": "approved", "page": 2, "kind": "Your curriculum"},
+                                   {"title": "mine.pdf", "page": 3, "kind": "Your curriculum"}])
+        self.assertEqual(review.call_args.args[0], "me")
         self.assertEqual(store.similarity_search_by_vector.call_args.kwargs["pre_filter"], {
             "owner_id": {"$eq": "me"}, "document_id": {"$in": ["approved"]},
         })
         prompt = model.invoke.call_args.args[0][1].content
-        self.assertIn('"overall_score": 42', prompt)
+        self.assertIn('"sum_of_extracted_programme_credits": 42', prompt)
         self.assertNotIn("deleted", prompt)
         self.assertNotIn("someone-else", prompt)

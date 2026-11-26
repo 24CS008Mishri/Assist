@@ -1,45 +1,184 @@
 import { useEffect, useRef, useState } from 'react';
+import { BookOpen, Captions, Maximize, MessageSquare, Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react';
 
-export default function TavusVideo({ embedUrl }) {
-  const mount = useRef(null);
-  const [status, setStatus] = useState('Connecting to the video room…');
+function useMediaTrack(element, track, onBlocked) {
+  useEffect(() => {
+    const node = element.current;
+    if (!node || !track) return undefined;
+    const stream = new MediaStream([track]);
+    node.srcObject = stream;
+    void node.play().catch(() => {
+      if (node.srcObject === stream) onBlocked?.();
+    });
+    return () => {
+      node.srcObject = null;
+    };
+  }, [element, track, onBlocked]);
+}
+
+function availableTrack(participant, kind) {
+  const state = participant?.tracks?.[kind];
+  return state?.state === 'playable' ? state.persistentTrack || state.track : null;
+}
+
+function VideoTrack({ track, className, label }) {
+  const element = useRef(null);
+  useMediaTrack(element, track);
+  return <video ref={element} className={className} aria-label={label} autoPlay playsInline muted />;
+}
+
+export default function TavusVideo({ room, sources, onEnd }) {
+  const container = useRef(null);
+  const callRef = useRef(null);
+  const audioElement = useRef(null);
+  const [status, setStatus] = useState('Connecting…');
+  const [tracks, setTracks] = useState({});
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [captions, setCaptions] = useState(false);
+  const [transcript, setTranscript] = useState([]);
+  const [partial, setPartial] = useState(null);
+  const [drawer, setDrawer] = useState(null);
+  const [notice, setNotice] = useState('');
+  const playbackWarning = useRef(() => setPlaybackBlocked(true));
+  useMediaTrack(audioElement, tracks.avatarAudio, playbackWarning.current);
 
   useEffect(() => {
-    let cancelled = false;
+    let disposed = false;
     let call;
-    const fail = () => {
-      if (!cancelled) setStatus('Unable to join the video room. Check microphone access, then start a new call.');
-    };
+    const seenUtterances = new Set();
+
+    function syncTracks() {
+      if (disposed) return;
+      const { local, ...remote } = call.participants();
+      const avatar = Object.values(remote)[0];
+      setTracks({
+        avatarVideo: availableTrack(avatar, 'video'),
+        avatarAudio: availableTrack(avatar, 'audio'),
+        selfVideo: availableTrack(local, 'video'),
+        mic: availableTrack(local, 'audio') !== null,
+        camera: availableTrack(local, 'video') !== null,
+        micState: local?.tracks?.audio?.state,
+      });
+    }
+
+    function receiveUtterance(event) {
+      if (disposed || !event.fromId || !call.participants()[event.fromId] || call.participants()[event.fromId].local) return;
+      const message = event.data;
+      if (message?.conversation_id !== room.id) return;
+      if (!['conversation.utterance', 'conversation.utterance.streaming'].includes(message.event_type)) return;
+      const { role, speech, accumulated_speech: accumulated } = message.properties || {};
+      if (!['user', 'assistant', 'replica', 'pal'].includes(role)) return;
+      const speaker = role === 'user' ? 'user' : 'assistant';
+      const text = accumulated ?? speech;
+      if (typeof text !== 'string' || !text.trim()) return;
+      if (message.event_type.endsWith('.streaming')) {
+        if (role !== 'replica') setPartial({ role: speaker, text });
+        return;
+      }
+      const key = `${speaker}:${message.inference_id ?? message.timestamp ?? ''}:${text}`;
+      if (seenUtterances.has(key)) return;
+      seenUtterances.add(key);
+      setPartial(null);
+      setTranscript(previous => [...previous.slice(-99), { key, role: speaker, text }]);
+    }
+
+    function fail() {
+      if (!disposed) setStatus('Connection failed');
+    }
+
     async function connect() {
       try {
         const { default: Daily } = await import('@daily-co/daily-js');
-        if (cancelled) return;
-        const url = new URL(embedUrl);
+        if (disposed) return;
+        const url = new URL(room.embed_url);
         const token = url.searchParams.get('t');
         url.search = '';
-        call = Daily.createFrame(mount.current, {
-          showLeaveButton: false,
-          iframeStyle: { width: '100%', height: '100%', border: '0' },
+        call = Daily.createCallObject();
+        callRef.current = call;
+        call.on('joined-meeting', () => {
+          if (!disposed) setStatus('Connected');
+          syncTracks();
         });
-        call.iframe().title = 'Live AI curriculum consultation';
-        call.iframe().referrerPolicy = 'no-referrer';
-        call.on('joined-meeting', () => { if (!cancelled) setStatus(''); });
-        call.on('left-meeting', () => { if (!cancelled) setStatus('The video room has closed.'); });
+        for (const event of ['participant-joined', 'participant-updated', 'participant-left', 'track-started', 'track-stopped']) {
+          call.on(event, syncTracks);
+        }
+        call.on('app-message', receiveUtterance);
+        call.on('camera-error', () => {
+          if (!disposed) setNotice('Check your browser’s microphone and camera permissions.');
+        });
+        call.on('left-meeting', () => {
+          if (!disposed) setStatus('Disconnected');
+          syncTracks();
+        });
         call.on('error', fail);
         await call.join({ url: url.toString(), token, startVideoOff: true, userName: 'Curriculum Designer' });
       } catch {
         fail();
       }
     }
+
     void connect();
     return () => {
-      cancelled = true;
+      disposed = true;
+      callRef.current = null;
       if (call) void call.destroy().catch(() => {});
     };
-  }, [embedUrl]);
+  }, [room.id, room.embed_url]);
 
-  return <>
-    {status && <p role="status" className="muted">{status}</p>}
-    <div className="live-assistant-video" ref={mount} />
-  </>;
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await container.current.requestFullscreen();
+    } catch {
+      setNotice('Full screen is unavailable in this browser.');
+    }
+  }
+
+  const connected = status === 'Connected';
+  const latest = partial || transcript.at(-1);
+  const MicIcon = tracks.mic ? Mic : MicOff;
+  const CameraIcon = tracks.camera ? Video : VideoOff;
+  return <div className="virtual-call" ref={container}>
+    <div className="virtual-stage">
+      {tracks.avatarVideo && <VideoTrack track={tracks.avatarVideo} className="virtual-avatar" label="Curriculum consultant video" />}
+      <audio ref={audioElement} autoPlay />
+      <div className="virtual-stage-status" role="status">
+        <span className={connected ? 'virtual-dot is-connected' : 'virtual-dot'} /> {status}
+        {connected && <span>· {tracks.mic ? 'Mic on' : tracks.micState === 'blocked' ? 'Mic blocked' : 'Mic off'}</span>}
+      </div>
+      {!tracks.avatarVideo && <div className="virtual-wait">
+        {status.startsWith('Connecting') ? 'Joining the private consultation' : connected ? 'Waiting for the consultant’s video' : status}
+      </div>}
+      {tracks.selfVideo && <VideoTrack track={tracks.selfVideo} className="virtual-self-preview" label="Your camera preview" />}
+      {captions && latest && <p className="virtual-caption">{latest.role === 'user' ? 'You' : 'Assistant'} · {latest.text}</p>}
+      {playbackBlocked && <button className="btn virtual-playback" type="button" onClick={() => {
+        void audioElement.current.play().then(() => setPlaybackBlocked(false)).catch(() => {});
+      }}>Enable audio playback</button>}
+    </div>
+    <div className="virtual-call-controls" aria-label="Consultation controls">
+      <button className="btn" type="button" disabled={!connected} aria-pressed={Boolean(tracks.mic)}
+        onClick={() => callRef.current?.setLocalAudio(!tracks.mic)}><MicIcon size={17} /> {tracks.mic ? 'Mute' : 'Unmute'}</button>
+      <button className="btn" type="button" disabled={!connected} aria-pressed={Boolean(tracks.camera)}
+        onClick={() => callRef.current?.setLocalVideo(!tracks.camera)}><CameraIcon size={17} /> Camera</button>
+      <button className="btn" type="button" aria-pressed={captions} onClick={() => setCaptions(!captions)}><Captions size={17} /> Captions</button>
+      <button className="btn" type="button" aria-expanded={drawer === 'transcript'}
+        onClick={() => setDrawer(drawer === 'transcript' ? null : 'transcript')}><MessageSquare size={17} /> Transcript</button>
+      <button className="btn" type="button" aria-expanded={drawer === 'evidence'}
+        onClick={() => setDrawer(drawer === 'evidence' ? null : 'evidence')}><BookOpen size={17} /> Evidence</button>
+      <button className="btn icon-btn" type="button" aria-label="Toggle full screen" onClick={toggleFullscreen}><Maximize size={17} /></button>
+      <button className="btn btn-danger" type="button" onClick={onEnd}><PhoneOff size={17} /> End call</button>
+    </div>
+    {notice && <p className="virtual-notice" role="status">{notice}</p>}
+    {drawer && <aside className="virtual-drawer" aria-label={drawer === 'transcript' ? 'Transcript' : 'Evidence'}>
+      {drawer === 'transcript' ? (
+        transcript.length ? <ol>{transcript.map(turn => (
+          <li key={turn.key}><strong>{turn.role === 'user' ? 'You' : 'Assistant'}</strong> {turn.text}</li>
+        ))}</ol> : <p>Spoken turns will appear here as they become available.</p>
+      ) : (
+        sources.length ? <ul>{sources.map(source => (
+          <li key={JSON.stringify(source)}>{source.title}{source.page ? ` · page ${source.page}` : ''} <small>{source.kind}</small></li>
+        ))}</ul> : <p>Supporting references will appear after a curriculum question.</p>
+      )}
+    </aside>}
+  </div>;
 }

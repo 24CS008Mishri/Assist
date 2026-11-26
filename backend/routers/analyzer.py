@@ -1,9 +1,6 @@
-import logging
-import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pymongo.errors import PyMongoError
 
 from backend.core.auth import AuthenticatedUser, require_authenticated_user, require_role
 from backend.models.analyzer_schemas import StructuredCurriculum
@@ -18,11 +15,9 @@ from backend.services.curriculum_extraction_service import (
     extract_structured_curriculum,
 )
 from backend.services.scoring_service import score_structured_curriculum
-from backend.services.live_curriculum_knowledge import save_live_analysis
 
 
 router = APIRouter(prefix="/api/analyzer", tags=["analyzer"])
-logger = logging.getLogger(__name__)
 
 
 def _build_analyzer_score(
@@ -118,15 +113,9 @@ def analyze_curriculum_endpoint(
         )
     else:
         issues_available, issues, issues_error = generate_analyzer_issues(score)
-    report = AnalyzerAnalysis(
+    return AnalyzerAnalysis(
         **score.model_dump(),
         issues_available=issues_available,
         issues_error=issues_error,
         issues=issues,
     )
-    if os.getenv("TAVUS_PAL_ID", "").strip():
-        try:
-            save_live_analysis(current_user.user_id, report)
-        except (RuntimeError, PyMongoError):
-            logger.warning("Could not save the Analyzer summary for live consultations")
-    return report

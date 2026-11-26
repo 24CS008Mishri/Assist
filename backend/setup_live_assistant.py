@@ -7,19 +7,31 @@ from urllib.parse import urlsplit
 from dotenv import load_dotenv
 import httpx
 
+from backend.services.live_speech import avatar_gender
+
 TOOL_NAME = "answer_curriculum_question"
-PAL_PROMPT = (
-    "You are the AICTE Assist AI Curriculum Assistant. Be friendly and professional. "
-    "For any question about academia, AICTE, curriculum files, scores, reviewer feedback, "
-    "or this portal, always call answer_curriculum_question before answering. You may "
-    "greet, request clarification, and acknowledge a goodbye directly. Use this call's "
-    "history to resolve follow-ups and names. Keep the question in the user's language "
-    "and provide a separate English search query with programme, branch, year, names, "
-    "technical terms, and acronyms when known. Do not guess missing details. "
-    "Match English, Hindi, Gujarati, or the user's natural mix, switching with the user. "
-    "The tool provides your spoken answer. If it fails, say you could not verify the "
-    "information and offer to try again. Do not make up a factual answer."
-)
+
+
+def pal_prompt():
+    return (
+        f"Speak with {avatar_gender()} first-person grammar as a warm, confident curriculum consultant. "
+        "Sound like an experienced academic talking to a colleague. Match the user's natural "
+        "English, Hindi, Gujarati or language mix, and preserve familiar English academic terms. "
+        "Keep greetings and acknowledgments brief. Respond naturally to small talk and be "
+        "truthful if asked whether you are an AI. Do not reintroduce yourself. Wait through "
+        "short pauses, yield to interruptions, and use the full conversation for follow-ups. "
+        "Clarify only what is needed and match the user's level of familiarity. "
+        "For academic or curriculum claims, call answer_curriculum_question before answering. "
+        "Use review_curriculum for a review, comparison, missing courses, credits, or compliance. "
+        "Restate incomplete follow-ups inside the tool arguments with context, never aloud. "
+        "The search_query is English and should retain known programme, branch, year and course names. "
+        "When the user switches language, switch with them. Spell out numbers naturally and use "
+        "plain speech. If the tool fails, briefly say you couldn't check it and offer to try again. "
+        "Never invent a factual answer, approval or compliance finding."
+    )
+
+
+FLOW = {"turn_detection_model": "sparrow-2", "turn_taking_patience": "medium", "pal_interruptibility": "high"}
 
 
 def _identifier(value):
@@ -41,34 +53,42 @@ def provision(client, *, callback_origin, secret, face_id=None, pal_id=None, too
             "pipeline_mode": "full",
             "languages": ["en-in", "hi", "gu"],
             "disclosure_type": "always",
-            "system_prompt": PAL_PROMPT,
+            "system_prompt": pal_prompt(),
+            "layers": {"conversational_flow": FLOW},
         }).json()
         pal_id = _identifier(pal.get("pal_id"))
         print(f"Created PAL {pal_id}", flush=True)
+    else:
+        result = client.patch(f"/v2/pals/{_identifier(pal_id)}", json=[
+            {"op": "replace", "path": "/system_prompt", "value": pal_prompt()},
+            {"op": "add", "path": "/layers/conversational_flow", "value": FLOW},
+        ])
+        if result.status_code != 304:
+            result.raise_for_status()
     delivery = {"api": {
         "url": callback_origin + "/api/live-assistant/tavus-tool",
         "method": "POST",
         "auth": {"type": "hmac", "secret": secret},
         "timeout": 20,
     }}
-    if not tool_id:
-        tool = post("/v2/tools", {
-            "name": TOOL_NAME,
-            "origin": "llm",
-            "description": "Get the grounded spoken answer for any curriculum, guideline, Analyzer or AICTE Assist question.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "question": {"type": "string", "description": "The user's question in their language, with context from the call when needed."},
-                    "search_query": {"type": "string", "description": "English keywords preserving named courses, branches, editions, and other relevant terms."},
-                    "language": {"type": "string", "enum": ["en-in", "hi", "gu", "mixed"]},
-                },
-                "required": ["question", "search_query", "language"],
+    configuration = {
+        "description": "Get a grounded spoken answer or review an uploaded curriculum against AICTE references.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The user's question in their language, with context from the call when needed."},
+                "search_query": {"type": "string", "description": "English keywords preserving named courses, branches, editions, and other relevant terms."},
+                "language": {"type": "string", "enum": ["en-in", "hi", "gu", "mixed"]},
+                "review_curriculum": {"type": "boolean", "description": "True for a review, model comparison, missing courses, credits or compliance."},
             },
-            "on_call": "generate_filler",
-            "on_resolve": "response_in_result",
-            "delivery": delivery,
-        }).json()
+            "required": ["question", "search_query", "language"],
+        },
+        "on_call": "silent",
+        "on_resolve": "response_in_result",
+        "delivery": delivery,
+    }
+    if not tool_id:
+        tool = post("/v2/tools", {"name": TOOL_NAME, "origin": "llm", **configuration}).json()
         tool_id = _identifier(tool.get("tool_id"))
         print(f"Created tool {tool_id}", flush=True)
     else:
@@ -77,7 +97,7 @@ def provision(client, *, callback_origin, secret, face_id=None, pal_id=None, too
         tool.raise_for_status()
         if tool.json().get("name") != TOOL_NAME:
             raise ValueError("The tool ID does not identify the Curriculum Assistant tool.")
-        result = client.patch(tool_path, json={"delivery": delivery})
+        result = client.patch(tool_path, json=configuration)
         result.raise_for_status()
     post(f"/v2/pals/{_identifier(pal_id)}/tools", {"tool_ids": [_identifier(tool_id)]})
     return pal_id

@@ -47,6 +47,7 @@ class ToolArguments(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     search_query: str = Field(min_length=1, max_length=1200)
     language: Literal["en-in", "hi", "gu", "mixed"]
+    review_curriculum: bool = False
 
 
 def _configuration():
@@ -132,15 +133,16 @@ def start_session(body: StartRequest, user: AuthenticatedUser = Depends(require_
             "require_auth": True,
             "max_participants": 2,
             "custom_greeting": {
-                "en-in": "Hello, I'm the AICTE Assist curriculum assistant. How can I help?",
-                "hi": "नमस्ते, मैं AICTE Assist की पाठ्यक्रम सहायक हूँ। मैं आपकी कैसे मदद कर सकती हूँ?",
-                "gu": "નમસ્તે, હું AICTE Assist ની અભ્યાસક્રમ સહાયક છું. હું તમને કેવી રીતે મદદ કરી શકું?",
+                "en-in": "Hello. What would you like to work through today?",
+                "hi": "नमस्ते। आज किस विषय पर बात करें?",
+                "gu": "નમસ્તે. આજે કયા વિષય પર વાત કરીએ?",
             }[body.language],
             "properties": {
                 "languages": [body.language, *(lang for lang in LANGUAGES if lang != body.language)],
                 "max_call_duration": MAX_CALL_SECONDS,
                 "participant_absent_timeout": 60,
                 "participant_left_timeout": 0,
+                "enable_closed_captions": True,
             },
         })
         provider_id = payload.get("conversation_id", "")
@@ -228,6 +230,7 @@ def _answer_tool(event: ToolRequest, arguments: ToolArguments):
     answer, sources = answer_live_question(
         row["_id"], row.get("document_id"), arguments.question,
         arguments.search_query, arguments.language, curriculum_id=row.get("curriculum_id"),
+        review_curriculum=arguments.review_curriculum,
     )
     updated = sessions.update_one(
         {**scope, "_id": row["_id"], "expires_at": {"$gt": datetime.now(timezone.utc)}},
