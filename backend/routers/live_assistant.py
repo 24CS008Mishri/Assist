@@ -24,6 +24,7 @@ from backend.data.database import get_designer_database, get_designer_metadata_c
 from backend.routers import live_transcripts
 from backend.services.live_curriculum_knowledge import PRIVATE_SOURCE, answer_live_question, get_live_llm
 from backend.services import sarvam_voice
+from backend.services.live_upload_inventory import is_upload_inventory, upload_inventory
 
 router = APIRouter(prefix="/api/live-assistant", tags=["live-assistant"])
 router.include_router(live_transcripts.router)
@@ -71,6 +72,7 @@ class ToolArguments(BaseModel):
     search_query: str = Field(min_length=1, max_length=1200)
     language: Literal["en-in", "hi", "gu", "mixed"]
     review_curriculum: bool = False
+    list_uploads: bool = False
 
 
 def _configuration():
@@ -334,7 +336,8 @@ def _voice_answer(conversation_id, owner_id, audio, media_type):
     language = detected if detected in sarvam_voice.LANGUAGES else row["voice_language"]
     previous = row.get("voice_topic", "")
     search_query = question
-    if language != "en-IN" or (previous and len(question.split()) < 8):
+    listing = is_upload_inventory(question)
+    if not listing and (language != "en-IN" or (previous and len(question.split()) < 8)):
         rewritten = get_live_llm().invoke(
             "Write only a short English search query for the current spoken question. Preserve "
             "course names and numbers. Use the previous topic only to resolve a follow-up. "
@@ -343,7 +346,7 @@ def _voice_answer(conversation_id, owner_id, audio, media_type):
         if isinstance(rewritten, str) and rewritten.strip():
             search_query = rewritten.strip()[:1200]
     tag = {"en-IN": "en-in", "hi-IN": "hi", "gu-IN": "gu"}.get(language, language)
-    answer, sources = answer_live_question(
+    answer, sources = upload_inventory(owner_id, tag, question) if listing or is_upload_inventory(search_query) else answer_live_question(
         owner_id, row.get("document_id"), question, search_query, tag,
         curriculum_id=row.get("curriculum_id"), previous_topic=previous,
     )
@@ -389,11 +392,14 @@ def _answer_tool(event: ToolRequest, arguments: ToolArguments, deadline: float):
     row = sessions.find_one(scope)
     if row is None:
         raise HTTPException(404, "Consultation expired or unavailable.")
-    answer, sources = answer_live_question(
-        row["_id"], row.get("document_id"), arguments.question,
-        arguments.search_query, arguments.language, curriculum_id=row.get("curriculum_id"),
-        review_curriculum=arguments.review_curriculum,
-    )
+    if arguments.list_uploads or is_upload_inventory(arguments.question, arguments.search_query):
+        answer, sources = upload_inventory(row["_id"], arguments.language, arguments.question)
+    else:
+        answer, sources = answer_live_question(
+            row["_id"], row.get("document_id"), arguments.question,
+            arguments.search_query, arguments.language, curriculum_id=row.get("curriculum_id"),
+            review_curriculum=arguments.review_curriculum,
+        )
     if monotonic() >= deadline:
         raise TimeoutError("Evidence deadline exceeded")
     updated = sessions.update_one(

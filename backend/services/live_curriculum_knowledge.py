@@ -17,7 +17,7 @@ from backend.services.rag_service import get_aicte_vectorstore, get_designer_vec
 PRIVATE_SOURCE = "submitted_curriculum"
 WORKFLOW = (
     "Designers upload a PDF from Create Curriculum and see it in My Curricula. "
-    "The AI Assistant is for text chat. The Virtual Assistant is for live consultations."
+    "The AI Assistant is for text chat. Vaani is for live consultations."
 )
 
 

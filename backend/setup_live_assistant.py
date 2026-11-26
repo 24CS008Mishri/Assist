@@ -22,6 +22,11 @@ def pal_prompt():
         "short pauses, yield to interruptions, and use the full conversation for follow-ups. "
         "Clarify only what is needed and match the user's level of familiarity. "
         "For academic or curriculum claims, call answer_curriculum_question before answering. "
+        "When asked which curricula the user uploaded, immediately call answer_curriculum_question "
+        "with list_uploads true and review_curriculum false. The tool reads the user's saved filenames. "
+        "For 'only the names' or 'did you check?' after an upload-list request, make the same call "
+        "and restate which uploads they mean in the question argument. Never only promise to check. "
+        "Keep any upload-list acknowledgment to a few words and avoid asking them to wait a minute. "
         "Use review_curriculum for a review, comparison, missing courses, credits, or compliance. "
         "Restate incomplete follow-ups inside the tool arguments with context, never aloud. "
         "The search_query is English and should retain known programme, branch, year and course names. "
@@ -76,7 +81,7 @@ def provision(client, *, callback_origin, secret, face_id=None, pal_id=None, too
         "timeout": 24,
     }}
     configuration = {
-        "description": "Get a grounded spoken answer or review an uploaded curriculum against AICTE references.",
+        "description": "List the user's uploaded curriculum names, answer a grounded curriculum question, or review a PDF against AICTE references.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -84,6 +89,7 @@ def provision(client, *, callback_origin, secret, face_id=None, pal_id=None, too
                 "search_query": {"type": "string", "description": "English keywords preserving named courses, branches, editions, and other relevant terms."},
                 "language": {"type": "string", "enum": ["en-in", "hi", "gu", "mixed"]},
                 "review_curriculum": {"type": "boolean", "description": "True for a review, model comparison, missing courses, credits or compliance."},
+                "list_uploads": {"type": "boolean", "description": "True when asked for the names or list of curricula the user uploaded, including related follow-ups. False for subjects inside a curriculum."},
             },
             "required": ["question", "search_query", "language"],
         },

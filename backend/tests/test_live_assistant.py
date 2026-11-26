@@ -163,6 +163,35 @@ class LiveAssistantTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.text, live.EVIDENCE_UNAVAILABLE["en-in"])
 
+    def test_gujarati_upload_names_go_directly_to_owned_metadata(self):
+        question = "મારા અપલોડેડ કરિક્યુલમ જુઓ અને મને લિસ્ટ આપો"
+        raw = json.dumps({
+            "name": "answer_curriculum_question", "conversation_id": "call1", "tool_call_id": "inventory",
+            "arguments": json.dumps({"question": question, "search_query": "my curriculum", "language": "gu"}),
+        }).encode()
+        signature = hmac.new(self.secret.encode(), raw, hashlib.sha256).hexdigest()
+        sessions = MagicMock()
+        sessions.find_one.return_value = {"_id": "verified-owner", "document_id": "selected"}
+        sessions.update_one.return_value.matched_count = 1
+        store = MagicMock()
+        store.find.return_value.sort.return_value = [{"filename": "Computer Science.pdf"}]
+        with patch.object(live, "_sessions", return_value=sessions), patch(
+            "backend.services.live_upload_inventory.get_designer_metadata_collection", return_value=store,
+        ), patch.object(live, "answer_live_question") as rag:
+            response = self.client.post("/api/live-assistant/tavus-tool", content=raw,
+                                        headers={"X-Tavus-Signature": signature})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Computer Science", response.text)
+        self.assertIn("તમે", response.text)
+        self.assertEqual(store.find.call_args.args[0]["owner_id"], "verified-owner")
+        rag.assert_not_called()
+
+    def test_upload_inventory_followup_is_distinct_from_curriculum_analysis(self):
+        self.assertTrue(live.is_upload_inventory("મને ખાલી કરિક્યુલમના નામ આપો, અંદરની ડિટેલ્સ નહીં."))
+        self.assertTrue(live.is_upload_inventory("मेरे अपलोड किए हुए पाठ्यक्रम के नाम बताओ"))
+        self.assertFalse(live.is_upload_inventory("Compare credits in my uploaded curricula"))
+        self.assertFalse(live.is_upload_inventory("List subjects inside my selected curriculum"))
+
     def test_citations_and_end_are_scoped_to_verified_owner(self):
         sessions = MagicMock()
         sessions.find_one.return_value = None

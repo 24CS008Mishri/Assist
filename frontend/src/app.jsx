@@ -34,7 +34,7 @@ const navByRole = {
     ],
     designer: [
         { label: 'Dashboard', href: '/designer/dashboard', icon: LayoutDashboard }, { label: 'My Curricula', href: '/designer/curricula', icon: FolderKanban },
-        { label: 'Create Curriculum', href: '/designer/create', icon: Plus, permission: 'curricula.create' }, { label: 'AI Assistant', href: '/designer/assistant', icon: Bot, permission: 'ai.use' }, { label: 'Virtual Assistant', href: '/designer/virtual-assistant', icon: Video, permission: 'ai.use' },
+        { label: 'Create Curriculum', href: '/designer/create', icon: Plus, permission: 'curricula.create' }, { label: 'AI Assistant', href: '/designer/assistant', icon: Bot, permission: 'ai.use' }, { label: 'Vaani', href: '/designer/virtual-assistant', icon: Video, permission: 'ai.use' },
         { label: 'Resource Assistant', href: '/designer/resources', icon: BookMarked, permission: 'resources.use' }, { label: 'Curriculum Comparison', href: '/designer/comparison', icon: Network, permission: 'comparison.use' },
         { label: 'Curriculum Analyzer', href: '/designer/analyzer', icon: BarChart3, permission: 'analyzer.use' }, { label: 'Change Requests', href: '/designer/changes', icon: RefreshCw },
         { label: 'Improvement Tracker', href: '/designer/improvements', icon: Activity, permission: 'curricula.update' },
@@ -246,7 +246,7 @@ function DashboardActions({ role }) {
         designer: [
             ['Upload Curriculum PDF', 'Start the next governed curriculum version from a PDF.', Upload, '/designer/create'],
             ['Ask AI Assistant', 'Get evidence-backed help for outcomes, structure and coverage.', Bot, '/designer/assistant'],
-            ['Virtual Assistant', 'Start a live curriculum consultation.', Video, '/designer/virtual-assistant'],
+            ['Vaani', 'Start a live curriculum consultation.', Video, '/designer/virtual-assistant'],
             ['Analyze Curriculum', 'Find problems and apply defined solutions before submission.', BarChart3, '/designer/analyzer'],
         ],
         institute: [

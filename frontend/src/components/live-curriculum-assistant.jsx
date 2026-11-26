@@ -224,8 +224,8 @@ export default function LiveCurriculumAssistant() {
     <section className="virtual-assistant" aria-labelledby="virtual-assistant-heading">
       <header className="virtual-header">
         <div>
-          <h1 id="virtual-assistant-heading" className="font-display">Virtual Assistant</h1>
-          <p>Live curriculum consultation with Vaani, an AI-generated consultant.</p>
+          <h1 id="virtual-assistant-heading" className="font-display">Vaani</h1>
+          <p>Live consultation with an AI curriculum consultant.</p>
         </div>
         <ConsultationHistory />
       </header>
