@@ -6,6 +6,7 @@ import {
   ListChecks, RefreshCw, ShieldCheck, Sparkles, X,
 } from 'lucide-react';
 import { mockService } from '@/lib/mock-services';
+import WorkflowThought from './workflow-thought';
 import {
   coverageCalculation, criterionCalculation, criterionScoreLabel,
   documentScopeLabel, hasLowEvaluationCoverage, isPartialCurriculum, overallScoreLabel,
@@ -120,8 +121,15 @@ function ReviewerAnalyzer({ submissionId, notify, formatDate }) {
         <RefreshCw size={15} className={busy ? 'analyzer-spin' : undefined} aria-hidden="true" /> {busy ? 'Analyzing…' : 'Recalculate'}
       </button>
     </header>
-    {busy && <Notice loading title={report ? 'Recalculating report' : 'Analyzing curriculum'} testId="analyzer-loading"
-      detail={report ? 'The last completed report is shown below.' : 'Evaluating the submitted version and its supporting evidence.'} />}
+    <div className="ra-notice ra-thought" data-testid={busy ? 'analyzer-loading' : undefined}>
+      <WorkflowThought
+        working={busy}
+        label={report ? 'Recalculating…' : 'Analyzing curriculum…'}
+        doneLabel={error ? 'Request ended after' : 'Analyzed in'}
+        steps={error ? [] : !busy ? ['Submission loaded', 'Analysis received'] : submission
+          ? ['Submission loaded', 'Waiting for analysis of scores and evidence'] : ['Loading the submitted version']}
+      />
+    </div>
     {error && <Notice alert title={errorTitles[error.status] || 'Analysis unavailable'} detail={error.message}
       testId={{ 404: 'analyzer-not-found', 409: 'analyzer-ambiguous', 422: 'analyzer-invalid-metadata' }[error.status] || 'analyzer-error'} retry={analyze} />}
     {report && <>

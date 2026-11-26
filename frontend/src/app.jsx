@@ -3,11 +3,14 @@ import { flushSync } from 'react-dom';
 import { Link, Router as WouterRouter, useLocation } from 'wouter';
 import LiveCurriculumAssistant from '@/components/live-curriculum-assistant';
 import { logoutVerifiedDesigner } from '@/lib/live-assistant-api';
-import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, Menu, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UserCog, Users, Video, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UserCog, Users, Video, X } from 'lucide-react';
 import { mockService } from '@/lib/mock-services';
 import { analyzerDocumentKey, submittedCurriculumDocuments } from '@/lib/analyzer-utils';
 import ReviewerAnalyzerPage from '@/components/reviewer-analyzer';
 import ReviewQueue from '@/components/reviewer-queue';
+import { useWorkspaceSidebar, WorkspaceMenuButton } from '@/components/workspace-motion';
+import SignInBackdrop from '@/components/signin-backdrop';
+import WorkflowThought from '@/components/workflow-thought';
 const roles = {
     admin: { label: 'AICTE Admin', short: 'Admin', base: '/admin/dashboard', description: 'Authoritative governance and national oversight', icon: Landmark },
     reviewer: { label: 'Reviewer / Expert', short: 'Reviewer', base: '/reviewer/dashboard', description: 'Human review, evidence and final decisions', icon: ClipboardCheck },
@@ -125,6 +128,7 @@ function AuthPage({ mode, onLogin }) {
     const [show, setShow] = useState(false);
     const [authError, setAuthError] = useState('');
     const [authLoading, setAuthLoading] = useState(false);
+    const [motionPaused, setMotionPaused] = useState(false);
     const title = 'Curriculum truth, with a human in the loop.';
     const handleLogin = async event => {
         event.preventDefault();
@@ -140,8 +144,17 @@ function AuthPage({ mode, onLogin }) {
         }
     };
     if (mode !== 'login') return <div className="auth-wrap grain"><div className="surface" style={{ maxWidth: 520, padding: 36, textAlign: 'center' }}><div className="brand-mark" style={{ margin: '0 auto 18px' }}><LockKeyhole size={20} /></div><p className="eyebrow">Account support</p><h1 className="page-title" style={{ margin: '8px 0 12px' }}>{mode === 'signup' ? 'Request an account' : 'Password help'}</h1><p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>{mode === 'signup' ? 'Accounts are provisioned by an Admin. Ask your organization?s administrator to create and link your account.' : 'Online password recovery is not configured. Contact your organization?s administrator for help.'}</p><button className="btn btn-primary" style={{ marginTop: 22 }} onClick={() => setLocation('/login')} data-testid="button-auth-continue">Back to sign in</button></div></div>;
-    return <div className="auth-wrap grain"><div className="auth-panel">
-        <section className="auth-visual"><div><div style={{ display: 'flex', alignItems: 'center', gap: 11 }}><div className="brand-mark"><Landmark size={19} /></div><strong className="font-display">AICTE GOV</strong></div><div style={{ marginTop: 86 }}><p className="eyebrow" style={{ color: '#e7daf4' }}>National academic governance</p><h1 style={{ font: '700 42px/1.03 var(--app-font-display)', letterSpacing: '-.055em', margin: '12px 0 16px' }}>Easier way to manage curriculum.</h1><p style={{ color: 'rgba(255,255,255,.7)', maxWidth: 310, lineHeight: 1.7, fontSize: 13 }}>Authoritative sources. Visible evidence. Expert decisions. One shared record of curriculum truth.</p></div></div><div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'rgba(255,255,255,.68)', fontSize: 11 }}><ShieldCheck size={16} /> AI assistance never replaces human approval.</div></section>
+    return <div className="auth-wrap auth-entry grain"><SignInBackdrop paused={motionPaused} /><div className="auth-panel">
+        <section className="auth-visual">
+            <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}><div className="brand-mark"><Landmark size={19} /></div><strong className="font-display">AICTE GOV</strong></div>
+                <div className="signin-visual-copy"><p className="eyebrow" style={{ color: '#e7daf4' }}>National academic governance</p><h1 style={{ fontFamily: 'var(--app-font-display)', lineHeight: 1.03, letterSpacing: '-.055em', margin: '12px 0 16px' }}>Easier way to manage curriculum.</h1><p style={{ color: '#efe3f8', maxWidth: 310, lineHeight: 1.7, fontSize: 13 }}>Authoritative sources. Visible evidence. Expert decisions. One shared record of curriculum truth.</p></div>
+            </div>
+            <div className="signin-visual-footer">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#efe3f8', fontSize: 11 }}><ShieldCheck size={16} /> AI assistance never replaces human approval.</div>
+                <button type="button" className="signin-motion-toggle" onClick={() => setMotionPaused((current) => !current)}>{motionPaused ? 'Resume background' : 'Pause background'}</button>
+            </div>
+        </section>
         <section className="auth-form"><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }}><div><p className="eyebrow">Sign in</p><h2 className="font-display" style={{ fontSize: 25, margin: '7px 0 0', letterSpacing: '-.035em' }}>{title}</h2></div><div className="brand-mark" style={{ background: '#f2eafa' }}><LockKeyhole size={19} /></div></div>
             <form onSubmit={handleLogin}><label className="label" htmlFor="login-email">Email address</label><input id="login-email" className="field" name="email" type="email" autoComplete="email" placeholder="name@organization.edu" required data-testid="input-login-email" /><label className="label" htmlFor="login-password" style={{ marginTop: 14 }}>Password</label><div style={{ position: 'relative' }}><input id="login-password" className="field" name="password" type={show ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" required style={{ paddingRight: 44 }} data-testid="input-login-password" /><button type="button" className="btn btn-ghost icon-btn" aria-label={show ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: 2, top: 2, boxShadow: 'none' }} onClick={() => setShow(!show)} data-testid="button-show-password"><Eye size={16} /></button></div>{authError && <p className="auth-error" role="alert">{authError}</p>}<div style={{ display: 'flex', justifyContent: 'flex-end', margin: '12px 0 17px', fontSize: 11 }}><button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/forgot-password')} data-testid="link-forgot-password">Password help</button></div><p className="muted" style={{ fontSize: 11, lineHeight: 1.5 }}>Your account role determines the workspace you can access.</p><button className="btn btn-primary" style={{ width: '100%', marginTop: 20, minHeight: 44 }} disabled={authLoading} data-testid="button-login">{authLoading ? 'Signing in?' : 'Sign in'} <ArrowRight size={16} /></button><p className="muted" style={{ textAlign: 'center', fontSize: 11, marginTop: 18 }}>Need access? <button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/signup')} data-testid="link-signup">Request an account</button></p></form>
         </section>
@@ -154,11 +167,43 @@ function Unauthorized() {
 function AppShell({ session, role, path, open, setOpen, onLogout, notify, toast }) {
     const [menu, setMenu] = useState(false);
     const [, setLocation] = useLocation();
+    const sidebar = useWorkspaceSidebar(open, setOpen);
     const links = navByRole[role].filter((item) => can(role, item.permission));
     const primaryLinks = links.filter((item) => item.label !== 'Settings');
     const settingsLink = links.find((item) => item.label === 'Settings');
     const current = links.find((item) => path === item.href) ?? links.find((item) => path.startsWith(item.href)) ?? links[0];
-    return <div className="app-shell grain"><aside className={`sidebar ${open ? 'open' : ''}`}><div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '0 10px 27px', minWidth: 0 }}><div className="brand-mark"><Landmark size={18} /></div><div style={{ minWidth: 0 }}><strong className="font-display" style={{ fontSize: 14 }}>AICTE</strong><div style={{ color: 'rgba(255,255,255,.5)', fontSize: 9, marginTop: 2 }}>GOVERNANCE PORTAL</div></div><button className="btn btn-ghost icon-btn" style={{ marginLeft: 'auto', color: '#fff', display: 'none' }} onClick={() => setOpen(false)}><X size={17} /></button></div><div className="sidebar-scroll">{primaryLinks.map((item) => <Link href={item.href} key={item.href} className={`nav-link ${current?.href === item.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}><item.icon size={16} strokeWidth={1.8} /><span>{item.label}</span></Link>)}</div><div className="sidebar-footer"><div style={{ padding: '10px 13px', color: 'rgba(255,255,255,.6)', fontSize: 10, lineHeight: 1.5 }}>DEMO MODE<br /><span style={{ color: '#e7d6f7' }}>Local governance state</span></div>{settingsLink && <Link href={settingsLink.href} className={`nav-link ${current?.href === settingsLink.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid="link-nav-settings"><Settings size={16} /><span>Settings</span></Link>}<button className="nav-link" onClick={onLogout} data-testid="button-logout"><LogOut size={16} /><span>Sign out</span></button></div></aside>{open && <button className="drawer-backdrop" onClick={() => setOpen(false)} aria-label="Close navigation" />}<main className="main-area"><header className="topbar"><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button className="btn icon-btn mobile-menu" onClick={() => setOpen(true)} data-testid="button-open-navigation"><Menu size={18} /></button><div className="breadcrumb muted" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}><span>Workspace</span><ChevronRight size={13} /><strong style={{ color: 'hsl(var(--foreground))' }}>{current?.label}</strong></div></div><div className="topbar-actions"><button className="btn icon-btn notification-button" onClick={() => setLocation(`${roles[role].base}/notifications`)} aria-label="Open notifications" data-testid="button-header-notifications"><Bell size={17} /></button><div style={{ position: 'relative' }}><button className="btn" style={{ padding: '4px 9px 4px 5px', gap: 8 }} onClick={() => setMenu(!menu)} data-testid="button-user-menu"><span className="brand-mark" style={{ width: 29, height: 29, borderRadius: 10, fontSize: 10, fontWeight: 700 }}>{initials(session.name)}</span><span style={{ textAlign: 'left', display: 'block' }}><strong style={{ display: 'block', fontSize: 11 }}>{session.name}</strong><small className="muted" style={{ fontSize: 9 }}>{roles[role].short}</small></span><ChevronDown size={14} /></button>{menu && <div className="surface" style={{ position: 'absolute', right: 0, top: 48, width: 230, padding: 10, zIndex: 40 }}><p className="eyebrow" style={{ padding: '4px 8px 8px' }}>Signed in workspace</p><div style={{ padding: '2px 8px 10px', fontSize: 12 }}><strong>{roles[role].label}</strong><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 3 }}>Role is assigned to your account.</span></div><button className="btn btn-ghost btn-danger" style={{ width: '100%', justifyContent: 'flex-start', marginTop: 4 }} onClick={onLogout} data-testid="button-menu-logout"><LogOut size={14} /> Sign out</button></div>}</div></div></header><PageContent role={role} path={path} notify={notify} /></main>{toast && <div className="toast-note" data-testid="status-toast"><CheckCircle size={15} style={{ verticalAlign: 'middle', marginRight: 7 }} />{toast}</div>}</div>;
+    return <div className={`app-shell grain ${sidebar.visible ? 'workspace-nav-entering' : 'workspace-nav-hidden'}`}>
+        <aside ref={sidebar.sidebarRef} id="workspace-navigation" className="sidebar" inert={sidebar.visible ? undefined : ''}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '0 10px 27px', minWidth: 0 }}>
+                <div className="brand-mark"><Landmark size={18} /></div>
+                <div style={{ minWidth: 0 }}><strong className="font-display" style={{ fontSize: 14 }}>AICTE</strong><div style={{ color: 'rgba(255,255,255,.5)', fontSize: 9, marginTop: 2 }}>GOVERNANCE PORTAL</div></div>
+            </div>
+            <nav className="sidebar-scroll" aria-label="Workspace">
+                {primaryLinks.map((item, index) => <Link href={item.href} key={item.href} className={`nav-link ${current?.href === item.href ? 'active' : ''}`}
+                    style={{ '--link-order': index }} aria-current={current?.href === item.href ? 'page' : undefined} onClick={sidebar.closeDrawer}
+                    data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}>
+                    <item.icon size={16} strokeWidth={1.8} /><span>{item.label}</span>
+                </Link>)}
+            </nav>
+            <div className="sidebar-footer">
+                <div style={{ padding: '10px 13px', color: 'rgba(255,255,255,.6)', fontSize: 10, lineHeight: 1.5 }}>DEMO MODE<br /><span style={{ color: '#e7d6f7' }}>Local governance state</span></div>
+                {settingsLink && <Link href={settingsLink.href} className={`nav-link ${current?.href === settingsLink.href ? 'active' : ''}`} onClick={sidebar.closeDrawer} data-testid="link-nav-settings"><Settings size={16} /><span>Settings</span></Link>}
+                <button className="nav-link" onClick={onLogout} data-testid="button-logout"><LogOut size={16} /><span>Sign out</span></button>
+            </div>
+        </aside>
+        <div className="workspace-nav-curtain" data-open={sidebar.mobile && sidebar.visible} onClick={sidebar.closeDrawer} aria-hidden="true" />
+        <main className="main-area">
+            <header className="topbar">
+                <div className="workspace-topbar-start">
+                    <WorkspaceMenuButton visible={sidebar.visible} toggle={sidebar.toggle} toggleRef={sidebar.toggleRef} />
+                    <div className="breadcrumb muted"><span>Workspace</span><ChevronRight size={13} /><strong style={{ color: 'hsl(var(--foreground))' }}>{current?.label}</strong></div>
+                </div>
+                <div className="topbar-actions" inert={sidebar.mobile && sidebar.visible ? '' : undefined}><button className="btn icon-btn notification-button" onClick={() => setLocation(`${roles[role].base}/notifications`)} aria-label="Open notifications" data-testid="button-header-notifications"><Bell size={17} /></button><div style={{ position: 'relative' }}><button className="btn" style={{ padding: '4px 9px 4px 5px', gap: 8 }} onClick={() => setMenu(!menu)} data-testid="button-user-menu"><span className="brand-mark" style={{ width: 29, height: 29, borderRadius: 10, fontSize: 10, fontWeight: 700 }}>{initials(session.name)}</span><span style={{ textAlign: 'left', display: 'block' }}><strong style={{ display: 'block', fontSize: 11 }}>{session.name}</strong><small className="muted" style={{ fontSize: 9 }}>{roles[role].short}</small></span><ChevronDown size={14} /></button>{menu && <div className="surface" style={{ position: 'absolute', right: 0, top: 48, width: 230, padding: 10, zIndex: 40 }}><p className="eyebrow" style={{ padding: '4px 8px 8px' }}>Signed in workspace</p><div style={{ padding: '2px 8px 10px', fontSize: 12 }}><strong>{roles[role].label}</strong><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 3 }}>Role is assigned to your account.</span></div><button className="btn btn-ghost btn-danger" style={{ width: '100%', justifyContent: 'flex-start', marginTop: 4 }} onClick={onLogout} data-testid="button-menu-logout"><LogOut size={14} /> Sign out</button></div>}</div></div>
+            </header>
+            <PageContent role={role} path={path} notify={notify} />
+        </main>
+        {toast && <div className="toast-note" data-testid="status-toast"><CheckCircle size={15} style={{ verticalAlign: 'middle', marginRight: 7 }} />{toast}</div>}
+    </div>;
 }
 function PageContent({ role, path, notify }) {
     if (path.endsWith('/dashboard'))
@@ -788,6 +833,7 @@ function RagAssistantPage({ notify }) {
     });
     const [activeChatId, setActiveChatId] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [activity, setActivity] = useState(null);
     const activeChat = chats.find((chat) => chat.id === activeChatId);
     const messages = activeChat?.messages ?? [];
     const sources = messages.at(-1)?.sources ?? [];
@@ -816,6 +862,7 @@ function RagAssistantPage({ notify }) {
             setActiveChatId(chatId);
         }
         setQuestion('');
+        setActivity({ chatId, requestKey: `${chatId}-${nextMessages.length}`, failed: false });
         setLoading(true);
         try {
             const response = await mockService.askAssistant(text, history);
@@ -826,6 +873,7 @@ function RagAssistantPage({ notify }) {
             } : chat));
         }
         catch (error) {
+            setActivity((current) => ({ ...current, failed: true }));
             notify(`Assistant unavailable: ${error.message}`);
         }
         finally {
@@ -839,7 +887,13 @@ function RagAssistantPage({ notify }) {
                 <div className="rag-conversation" aria-live="polite">
                     {!messages.length && <div className="rag-empty"><Bot size={27} color="#8061ac" /><p>Start a grounded curriculum conversation</p><span>Ask about policies, course structure, outcomes, or assessment using the PDFs indexed by the Admin.</span></div>}
                     {messages.map((message, index) => <div className={`rag-message ${message.role}`} key={`${message.role}-${index}`}><span className="badge badge-slate">{message.role === 'user' ? 'You' : 'AI Assistant'}</span>{message.role === 'assistant' ? <RagAnswer content={message.content} /> : <p>{message.content}</p>}{message.role === 'assistant' && <button className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={async () => { try { await navigator.clipboard.writeText(message.content); notify('Response copied to clipboard.'); } catch { notify('Clipboard access is unavailable in this browser.'); } }} data-testid={`button-copy-ai-answer-${index}`}><Check size={14} /> Copy response</button>}</div>)}
-                    {loading && <div className="rag-message assistant"><span className="badge badge-slate">AI Assistant</span><p className="muted">Searching indexed PDF vectors and preparing a grounded answerâ€¦</p></div>}
+                    {activity && <div className="rag-message assistant rag-processing" hidden={activity.chatId !== activeChatId}>
+                        <WorkflowThought key={activity.requestKey} working={loading}
+                            doneLabel={activity.failed ? 'Request ended after' : 'Thought for'}
+                            steps={activity.failed ? [] : loading
+                                ? ['Question sent', 'Waiting for a reply based on indexed PDFs']
+                                : ['Question sent', 'Reply received']} />
+                    </div>}
                 </div>
                 <form onSubmit={ask} style={{ display: 'flex', gap: 8, marginTop: 13 }}>
                     <input className="field" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask a question about the indexed curriculum documents." disabled={loading} data-testid="input-assistant-question" />
