@@ -27,10 +27,13 @@ function VideoTrack({ track, className, label }) {
   return <video ref={element} className={className} aria-label={label} autoPlay playsInline muted />;
 }
 
-export default function TavusVideo({ room, sources, onEnd }) {
+export default function TavusVideo({ room, sources, onEnd, reconnecting, reconnectFailed, onDisconnected, onRetry, onTopic }) {
   const container = useRef(null);
   const callRef = useRef(null);
   const audioElement = useRef(null);
+  const handlers = useRef({ onDisconnected, onTopic });
+  const microphoneEnabled = useRef(true);
+  const cameraEnabled = useRef(false);
   const [status, setStatus] = useState('Connecting…');
   const [tracks, setTracks] = useState({});
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
@@ -42,10 +45,17 @@ export default function TavusVideo({ room, sources, onEnd }) {
   const playbackWarning = useRef(() => setPlaybackBlocked(true));
   useMediaTrack(audioElement, tracks.avatarAudio, playbackWarning.current);
 
+  useEffect(() => { handlers.current = { onDisconnected, onTopic }; }, [onDisconnected, onTopic]);
+
   useEffect(() => {
     let disposed = false;
     let call;
+    let joined = false;
+    let departureTimer;
     const seenUtterances = new Set();
+    setStatus('Connecting…');
+    setTracks({});
+    setPartial(null);
 
     function syncTracks() {
       if (disposed) return;
@@ -75,15 +85,18 @@ export default function TavusVideo({ room, sources, onEnd }) {
         if (role !== 'replica') setPartial({ role: speaker, text });
         return;
       }
-      const key = `${speaker}:${message.inference_id ?? message.timestamp ?? ''}:${text}`;
+      const key = `${room.id}:${speaker}:${message.inference_id ?? message.timestamp ?? ''}:${text}`;
       if (seenUtterances.has(key)) return;
       seenUtterances.add(key);
+      if (speaker === 'user') handlers.current.onTopic(text);
       setPartial(null);
       setTranscript(previous => [...previous.slice(-99), { key, role: speaker, text }]);
     }
 
     function fail() {
-      if (!disposed) setStatus('Connection failed');
+      if (disposed) return;
+      setStatus('Connection failed');
+      if (joined) handlers.current.onDisconnected();
     }
 
     async function connect() {
@@ -96,22 +109,39 @@ export default function TavusVideo({ room, sources, onEnd }) {
         call = Daily.createCallObject();
         callRef.current = call;
         call.on('joined-meeting', () => {
+          joined = true;
           if (!disposed) setStatus('Connected');
           syncTracks();
         });
         for (const event of ['participant-joined', 'participant-updated', 'participant-left', 'track-started', 'track-stopped']) {
           call.on(event, syncTracks);
         }
+        call.on('participant-joined', () => window.clearTimeout(departureTimer));
+        call.on('participant-left', event => {
+          if (!joined || event.participant.local) return;
+          window.clearTimeout(departureTimer);
+          departureTimer = window.setTimeout(() => {
+            if (!disposed && !Object.values(call.participants()).some(participant => !participant.local)) {
+              setStatus('Video room ended');
+              handlers.current.onDisconnected();
+            }
+          }, 1800);
+        });
         call.on('app-message', receiveUtterance);
         call.on('camera-error', () => {
           if (!disposed) setNotice('Check your browser’s microphone and camera permissions.');
         });
         call.on('left-meeting', () => {
-          if (!disposed) setStatus('Disconnected');
+          if (disposed) return;
+          setStatus('Disconnected');
           syncTracks();
+          if (joined) handlers.current.onDisconnected();
         });
         call.on('error', fail);
-        await call.join({ url: url.toString(), token, startVideoOff: true, userName: 'Curriculum Designer' });
+        await call.join({
+          url: url.toString(), token, startVideoOff: !cameraEnabled.current,
+          startAudioOff: !microphoneEnabled.current, userName: 'Curriculum Designer',
+        });
       } catch {
         fail();
       }
@@ -120,6 +150,7 @@ export default function TavusVideo({ room, sources, onEnd }) {
     void connect();
     return () => {
       disposed = true;
+      window.clearTimeout(departureTimer);
       callRef.current = null;
       if (call) void call.destroy().catch(() => {});
     };
@@ -134,7 +165,8 @@ export default function TavusVideo({ room, sources, onEnd }) {
     }
   }
 
-  const connected = status === 'Connected';
+  const connected = status === 'Connected' && !reconnecting;
+  const displayStatus = reconnecting ? 'Reconnecting to Vaani…' : status;
   const latest = partial || transcript.at(-1);
   const MicIcon = tracks.mic ? Mic : MicOff;
   const CameraIcon = tracks.camera ? Video : VideoOff;
@@ -143,29 +175,31 @@ export default function TavusVideo({ room, sources, onEnd }) {
       {tracks.avatarVideo && <VideoTrack track={tracks.avatarVideo} className="virtual-avatar" label="Curriculum consultant video" />}
       <audio ref={audioElement} autoPlay />
       <div className="virtual-stage-status" role="status">
-        <span className={connected ? 'virtual-dot is-connected' : 'virtual-dot'} /> {status}
+        <span className={connected ? 'virtual-dot is-connected' : 'virtual-dot'} /> {displayStatus}
         {connected && <span>· {tracks.mic ? 'Mic on' : tracks.micState === 'blocked' ? 'Mic blocked' : 'Mic off'}</span>}
       </div>
       {!tracks.avatarVideo && <div className="virtual-wait">
-        {status.startsWith('Connecting') ? 'Joining the private consultation' : connected ? 'Waiting for the consultant’s video' : status}
+        {displayStatus.startsWith('Connecting') ? 'Joining the private consultation' : connected ? 'Waiting for Vaani’s video' : displayStatus}
       </div>}
       {tracks.selfVideo && <VideoTrack track={tracks.selfVideo} className="virtual-self-preview" label="Your camera preview" />}
-      {captions && latest && <p className="virtual-caption">{latest.role === 'user' ? 'You' : 'Assistant'} · {latest.text}</p>}
+      {captions && latest && <p className="virtual-caption">{latest.role === 'user' ? 'You' : 'Vaani'} · {latest.text}</p>}
       {playbackBlocked && <button className="btn virtual-playback" type="button" onClick={() => {
         void audioElement.current.play().then(() => setPlaybackBlocked(false)).catch(() => {});
       }}>Enable audio playback</button>}
     </div>
     <div className="virtual-call-controls" aria-label="Consultation controls">
       <button className="btn" type="button" disabled={!connected} aria-pressed={Boolean(tracks.mic)}
-        onClick={() => callRef.current?.setLocalAudio(!tracks.mic)}><MicIcon size={17} /> {tracks.mic ? 'Mute' : 'Unmute'}</button>
+        onClick={() => { microphoneEnabled.current = !tracks.mic; callRef.current?.setLocalAudio(microphoneEnabled.current); }}><MicIcon size={17} /> {tracks.mic ? 'Mute' : 'Unmute'}</button>
       <button className="btn" type="button" disabled={!connected} aria-pressed={Boolean(tracks.camera)}
-        onClick={() => callRef.current?.setLocalVideo(!tracks.camera)}><CameraIcon size={17} /> Camera</button>
+        onClick={() => { cameraEnabled.current = !tracks.camera; callRef.current?.setLocalVideo(cameraEnabled.current); }}><CameraIcon size={17} /> Camera</button>
       <button className="btn" type="button" aria-pressed={captions} onClick={() => setCaptions(!captions)}><Captions size={17} /> Captions</button>
       <button className="btn" type="button" aria-expanded={drawer === 'transcript'}
         onClick={() => setDrawer(drawer === 'transcript' ? null : 'transcript')}><MessageSquare size={17} /> Transcript</button>
       <button className="btn" type="button" aria-expanded={drawer === 'evidence'}
         onClick={() => setDrawer(drawer === 'evidence' ? null : 'evidence')}><BookOpen size={17} /> Evidence</button>
       <button className="btn icon-btn" type="button" aria-label="Toggle full screen" onClick={toggleFullscreen}><Maximize size={17} /></button>
+      {(reconnectFailed || status === 'Connection failed') && !reconnecting &&
+        <button className="btn" type="button" onClick={onRetry}>Reconnect</button>}
       <button className="btn btn-danger" type="button" onClick={onEnd}><PhoneOff size={17} /> End call</button>
     </div>
     {notice && <p className="virtual-notice" role="status">{notice}</p>}

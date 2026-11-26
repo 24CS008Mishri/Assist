@@ -19,14 +19,20 @@ export default function LiveCurriculumAssistant() {
   const [existingId, setExistingId] = useState(null);
   const [sources, setSources] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectFailed, setReconnectFailed] = useState(false);
   const [error, setError] = useState('');
   const activeRoom = useRef(null);
   const mounted = useRef(false);
+  const renewing = useRef(false);
+  const lastTopic = useRef('');
 
   useEffect(() => {
     mounted.current = true;
     const disconnect = () => {
-      if (activeRoom.current) void closeRoom(activeRoom.current).catch(() => {});
+      const id = activeRoom.current;
+      activeRoom.current = null;
+      if (id) void closeRoom(id).catch(() => {});
     };
     window.addEventListener('pagehide', disconnect);
     return () => {
@@ -44,7 +50,10 @@ export default function LiveCurriculumAssistant() {
         const response = await request(`${api}/${encodeURIComponent(room.id)}/sources`, { timeoutMs: 3500 });
         if (!cancelled) setSources(response.sources);
       } catch (failure) {
-        if (!cancelled && [401, 403, 404].includes(failure.status)) {
+        if (cancelled || renewing.current || activeRoom.current !== room.id) return;
+        if (failure.status === 404) {
+          void reconnect(room.id);
+        } else if ([401, 403].includes(failure.status)) {
           activeRoom.current = null;
           setRoom(null);
           setSources([]);
@@ -53,21 +62,14 @@ export default function LiveCurriculumAssistant() {
       }
     };
     const poll = window.setInterval(refresh, 4000);
-    const expiry = window.setTimeout(() => {
-      if (activeRoom.current === room.id) {
-        void closeRoom(room.id).catch(() => {});
-        activeRoom.current = null;
-        setRoom(null);
-        setSources([]);
-        setError('The consultation reached its time limit.');
-      }
-    }, Math.max(0, Date.parse(room.expires_at) - Date.now()));
+    const expiry = window.setTimeout(() => { void reconnect(room.id); },
+      Math.max(0, Date.parse(room.expires_at) - Date.now()));
     return () => {
       cancelled = true;
       window.clearInterval(poll);
       window.clearTimeout(expiry);
     };
-  }, [room]);
+  }, [room, reconnectFailed]);
 
   async function open() {
     setReady(false);
@@ -89,18 +91,52 @@ export default function LiveCurriculumAssistant() {
 
   useEffect(() => { void open(); }, []);
 
+  function createRoom(resumeTopic) {
+    const [documentId, curriculumId] = documentKey ? JSON.parse(documentKey) : [null, null];
+    return request(api, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language, document_id: documentId, curriculum_id: curriculumId, resume_topic: resumeTopic,
+      }),
+    });
+  }
+
+  async function reconnect(id, retry = false) {
+    if (id !== activeRoom.current || renewing.current || (reconnectFailed && !retry)) return;
+    renewing.current = true;
+    setReconnectFailed(false);
+    setReconnecting(true);
+    setError('');
+    try {
+      await request(`${api}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (activeRoom.current !== id) return;
+      const replacement = await createRoom(lastTopic.current);
+      if (!mounted.current || activeRoom.current !== id) {
+        void closeRoom(replacement.id).catch(() => {});
+        return;
+      }
+      activeRoom.current = replacement.id;
+      setRoom(replacement);
+    } catch (failure) {
+      if (activeRoom.current === id) {
+        setReconnectFailed(true);
+        setError(failure.message);
+      }
+    } finally {
+      renewing.current = false;
+      if (mounted.current) setReconnecting(false);
+    }
+  }
+
   async function start(event) {
     event.preventDefault();
     setBusy(true);
     setError('');
     setSources([]);
-    const [documentId, curriculumId] = documentKey ? JSON.parse(documentKey) : [null, null];
+    lastTopic.current = '';
     try {
-      const result = await request(api, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, document_id: documentId, curriculum_id: curriculumId }),
-      });
+      const result = await createRoom();
       if (!mounted.current) {
         void closeRoom(result.id).catch(() => {});
         return;
@@ -120,8 +156,10 @@ export default function LiveCurriculumAssistant() {
 
   async function end() {
     const sessionId = room?.id || existingId;
+    activeRoom.current = null;
     setBusy(true);
     setError('');
+    setReconnectFailed(false);
     // Remove the room immediately so microphone and camera access stop locally.
     setRoom(null);
     setSources([]);
@@ -142,11 +180,15 @@ export default function LiveCurriculumAssistant() {
       <header className="virtual-header">
         <div>
           <h1 id="virtual-assistant-heading" className="font-display">Virtual Assistant</h1>
-          <p>Live curriculum consultation with an AI-generated consultant.</p>
+          <p>Live curriculum consultation with Vaani, an AI-generated consultant.</p>
         </div>
       </header>
       {error && <p className="virtual-error" role="alert">{error}</p>}
-      {room ? <TavusVideo key={room.id} room={room} sources={sources} onEnd={end} /> : (
+      {room ? <TavusVideo room={room} sources={sources} onEnd={end}
+        reconnecting={reconnecting} reconnectFailed={reconnectFailed}
+        onDisconnected={() => { void reconnect(room.id); }}
+        onRetry={() => { void reconnect(room.id, true); }}
+        onTopic={text => { lastTopic.current = text.slice(0, 900); }} /> : (
         <div className="virtual-lobby">
           <div className="virtual-setup surface">
             <Video size={26} aria-hidden="true" />

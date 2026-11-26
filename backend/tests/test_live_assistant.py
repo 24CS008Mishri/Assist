@@ -70,6 +70,8 @@ class LiveAssistantTests(TestCase):
         self.assertEqual(set(result.json()), {"id", "embed_url", "expires_at"})
         body = provider.call_args.kwargs["body"]
         self.assertTrue(body["require_auth"])
+        self.assertEqual(body["custom_greeting"], live.GREETINGS["gu"])
+        self.assertEqual(body["properties"]["participant_left_timeout"], 90)
         self.assertEqual(body["properties"]["languages"], ["gu", "en-in", "hi"])
 
     def test_callback_rejects_invalid_hmac_and_resolves_owner_from_session(self):
@@ -100,6 +102,21 @@ class LiveAssistantTests(TestCase):
         answer.assert_called_once_with("verified-owner", "selected", "Explain credit gaps", "CSE credit gaps", "en-in",
                                        curriculum_id=None, review_curriculum=False)
         self.assertEqual(sessions.find_one.call_args.args[0]["state"], "active")
+
+    def test_evidence_deadline_returns_spoken_fallback(self):
+        raw = json.dumps({
+            "name": "answer_curriculum_question", "conversation_id": "call1", "tool_call_id": "turn-2",
+            "arguments": json.dumps({"question": "Review this", "search_query": "review", "language": "en-in"}),
+        }).encode()
+        signature = hmac.new(self.secret.encode(), raw, hashlib.sha256).hexdigest()
+        from time import sleep
+        with patch.object(live, "EVIDENCE_SECONDS", .01), patch.object(
+            live, "_answer_tool", side_effect=lambda *_: sleep(.08),
+        ):
+            response = self.client.post("/api/live-assistant/tavus-tool", content=raw,
+                                        headers={"X-Tavus-Signature": signature})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.text, live.EVIDENCE_UNAVAILABLE["en-in"])
 
     def test_citations_and_end_are_scoped_to_verified_owner(self):
         sessions = MagicMock()

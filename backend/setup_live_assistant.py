@@ -14,7 +14,7 @@ TOOL_NAME = "answer_curriculum_question"
 
 def pal_prompt():
     return (
-        f"Speak with {avatar_gender()} first-person grammar as a warm, confident curriculum consultant. "
+        f"Your name is Vaani (वाणी). Speak with {avatar_gender()} first-person grammar as a warm, confident curriculum consultant. "
         "Sound like an experienced academic talking to a colleague. Match the user's natural "
         "English, Hindi, Gujarati or language mix, and preserve familiar English academic terms. "
         "Keep greetings and acknowledgments brief. Respond naturally to small talk and be "
@@ -25,8 +25,11 @@ def pal_prompt():
         "Use review_curriculum for a review, comparison, missing courses, credits, or compliance. "
         "Restate incomplete follow-ups inside the tool arguments with context, never aloud. "
         "The search_query is English and should retain known programme, branch, year and course names. "
-        "When the user switches language, switch with them. Spell out numbers naturally and use "
-        "plain speech. If the tool fails, briefly say you couldn't check it and offer to try again. "
+        "When the user switches language, switch with them. Spell out numbers naturally. "
+        "When calling a tool, give a brief spoken update in the user's language about what you "
+        "are checking, then deliver the result. Never say the session is almost out of time or "
+        "offer a goodbye because of the room timer. The portal can continue in another room. "
+        "Use plain speech. If the tool fails, briefly say you couldn't check it and offer to try again. "
         "Never invent a factual answer, approval or compliance finding."
     )
 
@@ -52,7 +55,7 @@ def provision(client, *, callback_origin, secret, face_id=None, pal_id=None, too
             "default_face_id": _identifier(face_id),
             "pipeline_mode": "full",
             "languages": ["en-in", "hi", "gu"],
-            "disclosure_type": "always",
+            "disclosure_type": "off",
             "system_prompt": pal_prompt(),
             "layers": {"conversational_flow": FLOW},
         }).json()
@@ -61,6 +64,7 @@ def provision(client, *, callback_origin, secret, face_id=None, pal_id=None, too
     else:
         result = client.patch(f"/v2/pals/{_identifier(pal_id)}", json=[
             {"op": "replace", "path": "/system_prompt", "value": pal_prompt()},
+            {"op": "add", "path": "/disclosure_type", "value": "off"},
             {"op": "add", "path": "/layers/conversational_flow", "value": FLOW},
         ])
         if result.status_code != 304:
@@ -69,7 +73,7 @@ def provision(client, *, callback_origin, secret, face_id=None, pal_id=None, too
         "url": callback_origin + "/api/live-assistant/tavus-tool",
         "method": "POST",
         "auth": {"type": "hmac", "secret": secret},
-        "timeout": 20,
+        "timeout": 24,
     }}
     configuration = {
         "description": "Get a grounded spoken answer or review an uploaded curriculum against AICTE references.",
@@ -83,7 +87,7 @@ def provision(client, *, callback_origin, secret, face_id=None, pal_id=None, too
             },
             "required": ["question", "search_query", "language"],
         },
-        "on_call": "silent",
+        "on_call": "generate_filler",
         "on_resolve": "response_in_result",
         "delivery": delivery,
     }

@@ -2,6 +2,8 @@
 
 Open **Designer → Virtual Assistant** and select a curriculum or choose it during the call. Choose an opening language and start the consultation. The separate **AI Assistant** page is the existing text chat.
 
+Vaani acknowledges a curriculum question aloud before checking the evidence. The backend gives the evidence task 20 seconds and returns a spoken retry message if it cannot finish. Tavus may cap an individual room according to the account plan. If a room closes while the page is open, the portal attempts to reconnect, retaining the transcript and the last spoken topic. **End call** stops the consultation and cancels automatic reconnection. A failed reconnection can be retried from the call controls.
+
 ## Setup
 
 1. **Local Designer sign-in.** With the portal and API bound to loopback, set `ENABLE_LOCAL_DESIGNER_VIDEO_LOGIN=true` and open `http://127.0.0.1:5173/login`. Use the existing Designer email and password in the normal sign-in form. The server issues a short-lived session for the same curriculum owner ID after a successful local login. No account enrollment is needed. This switch is off by default and intended only for the loopback development portal. A shared deployment should keep it off and supply verified identity through its authentication middleware. When either authenticated mode is enabled, demo Designer headers cannot access private Designer routes. Other demo roles continue through the existing login.

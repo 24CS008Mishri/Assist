@@ -27,7 +27,7 @@ def get_live_llm():
     return ChatGroq(
         groq_api_key=settings.groq_api_key, model_name=settings.groq_model,
         temperature=0.15, max_tokens=min(settings.rag_answer_max_tokens, 1100),
-        timeout=10, max_retries=0,
+        timeout=8, max_retries=0,
     )
 
 
@@ -44,7 +44,7 @@ def answer_live_question(owner_id, document_id, question, search_query, language
     # uploads cannot enter the authorization set, even during an open call.
     review_curriculum = review_curriculum or bool(re.search(r"\b(compare|comparison|gap|compliance|missing|semester|credits?|requirements?|score)\b", search_query, re.I))
     embedding = get_embeddings().embed_query(search_query)
-    with timeout(7):
+    with timeout(6):
         records = {
             (row["document_id"], row.get("curriculum_id")): row
             for row in _owned_documents(owner_id) if row.get("document_id")
@@ -103,7 +103,7 @@ def answer_live_question(owner_id, document_id, question, search_query, language
                     rf"(?<!\w){re.escape(row['curriculum_id'])}(?!\w)", question, re.I
                 ))
             ][:2]
-        with timeout(4):
+        with timeout(3):
             for row in candidates:
                 summary, pages = curriculum_facts(owner_id, row)
                 reviews.append(summary)
