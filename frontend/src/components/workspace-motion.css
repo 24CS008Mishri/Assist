@@ -1,0 +1,107 @@
+.app-shell {
+  --drawer-ease: cubic-bezier(.2, .78, .2, 1);
+  --drawer-duration: 340ms;
+}
+
+.app-shell > .sidebar {
+  clip-path: circle(calc(100dvh + 260px) at 38px 33px);
+  transition: clip-path var(--drawer-duration) var(--drawer-ease),
+    transform var(--drawer-duration) var(--drawer-ease), visibility 0s;
+}
+.app-shell > .sidebar[inert] {
+  visibility: hidden;
+  pointer-events: none;
+  clip-path: circle(0 at 38px 33px);
+  transform: translateX(-32px);
+  transition-delay: 0s, 0s, var(--drawer-duration);
+}
+.app-shell > .main-area {
+  transition: margin-left var(--drawer-duration) var(--drawer-ease), width var(--drawer-duration) var(--drawer-ease);
+}
+.app-shell.workspace-nav-hidden > .main-area { margin-left: 0; width: 100%; }
+.workspace-topbar-start { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.workspace-topbar-start .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.workspace-menu-toggle { flex-shrink: 0; }
+.workspace-menu-toggle:focus-visible { outline: 2px solid #794caa; outline-offset: 3px; }
+.workspace-menu-bars { position: relative; display: block; width: 18px; height: 18px; }
+.workspace-menu-bars > span {
+  position: absolute;
+  inset: 8px 0 auto;
+  height: 2px;
+  background: currentColor;
+  border-radius: 4px;
+  transition: transform 230ms var(--drawer-ease), opacity 160ms ease;
+}
+.workspace-menu-bars > span:first-child { transform: translateY(-5px); }
+.workspace-menu-bars > span:last-child { transform: translateY(5px); }
+.workspace-menu-toggle[aria-expanded="true"] .workspace-menu-bars > span:first-child { transform: rotate(45deg); }
+.workspace-menu-toggle[aria-expanded="true"] .workspace-menu-bars > span:nth-child(2) { opacity: 0; }
+.workspace-menu-toggle[aria-expanded="true"] .workspace-menu-bars > span:last-child { transform: rotate(-45deg); }
+.workspace-nav-curtain { display: none; }
+.app-shell.workspace-nav-entering .nav-link {
+  animation: workspace-link-enter 240ms var(--drawer-ease) both;
+  animation-delay: calc(45ms + 20ms * min(var(--link-order, 0), 6));
+}
+@keyframes workspace-link-enter {
+  from { transform: translateX(-10px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (max-width: 900px) {
+  .app-shell > .sidebar { padding-top: 70px; box-shadow: none; }
+  .app-shell > .main-area { transition: none; }
+  .workspace-menu-toggle { position: relative; z-index: 32; }
+  .workspace-nav-curtain {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    background: rgb(30 19 44 / .4);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--drawer-duration) var(--drawer-ease), visibility 0s var(--drawer-duration);
+  }
+  .workspace-nav-curtain[data-open="true"] { opacity: 1; visibility: visible; transition-delay: 0s; }
+}
+@media (max-width: 560px) {
+  .app-shell .workspace-topbar-start .breadcrumb { display: none; }
+  .app-shell [data-testid="button-user-menu"] { max-width: 62vw; }
+  .app-shell [data-testid="button-user-menu"] > span:nth-child(2) { min-width: 0; }
+  .app-shell [data-testid="button-user-menu"] strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+.auth-wrap.auth-entry {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #302143;
+}
+.signin-flow {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 76% 22%, #78416d, transparent 52%), linear-gradient(145deg, #251839, #544084);
+}
+.auth-entry .auth-panel { position: relative; background: transparent; border-color: rgb(255 255 255 / .3); box-shadow: 0 24px 60px rgb(24 13 40 / .35); }
+.auth-entry .auth-visual { background: linear-gradient(135deg, rgb(31 18 49 / .93), rgb(43 25 66 / .74)); }
+.auth-entry .auth-form { background: hsl(var(--card)); }
+.signin-visual-copy { margin-top: clamp(22px, 6vw, 86px); }
+.auth-visual .signin-visual-copy h1 { font-size: clamp(1.8rem, 4vw, 2.65rem); }
+.signin-visual-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; }
+.signin-motion-toggle {
+  padding: 6px 9px;
+  border: 1px solid rgb(255 255 255 / .45);
+  border-radius: 6px;
+  color: #fff;
+  background: #39264e;
+  font-size: .75rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.signin-motion-toggle:focus-visible { outline: 2px solid #ebd8ff; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .app-shell { --drawer-duration: 0ms; }
+  .workspace-menu-bars > span { transition: none; }
+  .app-shell.workspace-nav-entering .nav-link { animation: none; }
+  .signin-motion-toggle { display: none; }
+}

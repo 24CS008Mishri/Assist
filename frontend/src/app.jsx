@@ -1,15 +1,16 @@
 ﻿﻿import { useEffect, useState } from 'react';
-import { Link, Router as WouterRouter, useLocation } from 'wouter';
-import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, Menu, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, Sparkles, Trash2, Upload, UserCog, Users, X } from 'lucide-react';
-import { mockService } from '@/lib/mock-services';
-import { useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, Router as WouterRouter, useLocation } from 'wouter';
 import LiveCurriculumAssistant from '@/components/live-curriculum-assistant';
 import { logoutVerifiedDesigner } from '@/lib/live-assistant-api';
-import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, Menu, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UserCog, Users, Video, X } from 'lucide-react';
-import { analyzerScoreHistory, mockChanges, mockCurricula, mockService, mockUsers, sourceCards } from '@/lib/mock-services';
-import { analyzerDocumentHref, analyzerDocumentKey, checkStatusLabel, coverageCalculation, criterionCalculation, criterionScoreLabel, documentScopeLabel, hasLowEvaluationCoverage, isPartialCurriculum, isPartialScopeExclusion, overallScoreLabel, requestedAnalyzerDocument, submittedCurriculumDocuments } from '@/lib/analyzer-utils';
+import { Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookMarked, BookOpen, Bot, Building2, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Clock3, ExternalLink, Eye, FileCheck2, FileText, Filter, FolderKanban, GraduationCap, History, Inbox, Landmark, LayoutDashboard, Lightbulb, ListChecks, LockKeyhole, LogOut, MessageSquareText, Network, Pencil, Plus, RefreshCw, Save, Search, Send, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UserCog, Users, Video, X } from 'lucide-react';
+import { mockService } from '@/lib/mock-services';
+import { analyzerDocumentKey, submittedCurriculumDocuments } from '@/lib/analyzer-utils';
+import ReviewerAnalyzerPage from '@/components/reviewer-analyzer';
+import ReviewQueue from '@/components/reviewer-queue';
+import { useWorkspaceSidebar, WorkspaceMenuButton } from '@/components/workspace-motion';
+import SignInBackdrop from '@/components/signin-backdrop';
+import WorkflowThought from '@/components/workflow-thought';
 const roles = {
     admin: { label: 'AICTE Admin', short: 'Admin', base: '/admin/dashboard', description: 'Authoritative governance and national oversight', icon: Landmark },
     reviewer: { label: 'Reviewer / Expert', short: 'Reviewer', base: '/reviewer/dashboard', description: 'Human review, evidence and final decisions', icon: ClipboardCheck },
@@ -127,6 +128,7 @@ function AuthPage({ mode, onLogin }) {
     const [show, setShow] = useState(false);
     const [authError, setAuthError] = useState('');
     const [authLoading, setAuthLoading] = useState(false);
+    const [motionPaused, setMotionPaused] = useState(false);
     const title = 'Curriculum truth, with a human in the loop.';
     const handleLogin = async event => {
         event.preventDefault();
@@ -142,8 +144,17 @@ function AuthPage({ mode, onLogin }) {
         }
     };
     if (mode !== 'login') return <div className="auth-wrap grain"><div className="surface" style={{ maxWidth: 520, padding: 36, textAlign: 'center' }}><div className="brand-mark" style={{ margin: '0 auto 18px' }}><LockKeyhole size={20} /></div><p className="eyebrow">Account support</p><h1 className="page-title" style={{ margin: '8px 0 12px' }}>{mode === 'signup' ? 'Request an account' : 'Password help'}</h1><p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>{mode === 'signup' ? 'Accounts are provisioned by an Admin. Ask your organization?s administrator to create and link your account.' : 'Online password recovery is not configured. Contact your organization?s administrator for help.'}</p><button className="btn btn-primary" style={{ marginTop: 22 }} onClick={() => setLocation('/login')} data-testid="button-auth-continue">Back to sign in</button></div></div>;
-    return <div className="auth-wrap grain"><div className="auth-panel">
-        <section className="auth-visual"><div><div style={{ display: 'flex', alignItems: 'center', gap: 11 }}><div className="brand-mark"><Landmark size={19} /></div><strong className="font-display">AICTE GOV</strong></div><div style={{ marginTop: 86 }}><p className="eyebrow" style={{ color: '#e7daf4' }}>National academic governance</p><h1 style={{ font: '700 42px/1.03 var(--app-font-display)', letterSpacing: '-.055em', margin: '12px 0 16px' }}>Easier way to manage curriculum.</h1><p style={{ color: 'rgba(255,255,255,.7)', maxWidth: 310, lineHeight: 1.7, fontSize: 13 }}>Authoritative sources. Visible evidence. Expert decisions. One shared record of curriculum truth.</p></div></div><div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'rgba(255,255,255,.68)', fontSize: 11 }}><ShieldCheck size={16} /> AI assistance never replaces human approval.</div></section>
+    return <div className="auth-wrap auth-entry grain"><SignInBackdrop paused={motionPaused} /><div className="auth-panel">
+        <section className="auth-visual">
+            <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}><div className="brand-mark"><Landmark size={19} /></div><strong className="font-display">AICTE GOV</strong></div>
+                <div className="signin-visual-copy"><p className="eyebrow" style={{ color: '#e7daf4' }}>National academic governance</p><h1 style={{ fontFamily: 'var(--app-font-display)', lineHeight: 1.03, letterSpacing: '-.055em', margin: '12px 0 16px' }}>Easier way to manage curriculum.</h1><p style={{ color: '#efe3f8', maxWidth: 310, lineHeight: 1.7, fontSize: 13 }}>Authoritative sources. Visible evidence. Expert decisions. One shared record of curriculum truth.</p></div>
+            </div>
+            <div className="signin-visual-footer">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#efe3f8', fontSize: 11 }}><ShieldCheck size={16} /> AI assistance never replaces human approval.</div>
+                <button type="button" className="signin-motion-toggle" onClick={() => setMotionPaused((current) => !current)}>{motionPaused ? 'Resume background' : 'Pause background'}</button>
+            </div>
+        </section>
         <section className="auth-form"><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 }}><div><p className="eyebrow">Sign in</p><h2 className="font-display" style={{ fontSize: 25, margin: '7px 0 0', letterSpacing: '-.035em' }}>{title}</h2></div><div className="brand-mark" style={{ background: '#f2eafa' }}><LockKeyhole size={19} /></div></div>
             <form onSubmit={handleLogin}><label className="label" htmlFor="login-email">Email address</label><input id="login-email" className="field" name="email" type="email" autoComplete="email" placeholder="name@organization.edu" required data-testid="input-login-email" /><label className="label" htmlFor="login-password" style={{ marginTop: 14 }}>Password</label><div style={{ position: 'relative' }}><input id="login-password" className="field" name="password" type={show ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" required style={{ paddingRight: 44 }} data-testid="input-login-password" /><button type="button" className="btn btn-ghost icon-btn" aria-label={show ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: 2, top: 2, boxShadow: 'none' }} onClick={() => setShow(!show)} data-testid="button-show-password"><Eye size={16} /></button></div>{authError && <p className="auth-error" role="alert">{authError}</p>}<div style={{ display: 'flex', justifyContent: 'flex-end', margin: '12px 0 17px', fontSize: 11 }}><button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/forgot-password')} data-testid="link-forgot-password">Password help</button></div><p className="muted" style={{ fontSize: 11, lineHeight: 1.5 }}>Your account role determines the workspace you can access.</p><button className="btn btn-primary" style={{ width: '100%', marginTop: 20, minHeight: 44 }} disabled={authLoading} data-testid="button-login">{authLoading ? 'Signing in?' : 'Sign in'} <ArrowRight size={16} /></button><p className="muted" style={{ textAlign: 'center', fontSize: 11, marginTop: 18 }}>Need access? <button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={() => setLocation('/signup')} data-testid="link-signup">Request an account</button></p></form>
         </section>
@@ -156,11 +167,43 @@ function Unauthorized() {
 function AppShell({ session, role, path, open, setOpen, onLogout, notify, toast }) {
     const [menu, setMenu] = useState(false);
     const [, setLocation] = useLocation();
+    const sidebar = useWorkspaceSidebar(open, setOpen);
     const links = navByRole[role].filter((item) => can(role, item.permission));
     const primaryLinks = links.filter((item) => item.label !== 'Settings');
     const settingsLink = links.find((item) => item.label === 'Settings');
     const current = links.find((item) => path === item.href) ?? links.find((item) => path.startsWith(item.href)) ?? links[0];
-    return <div className="app-shell grain"><aside className={`sidebar ${open ? 'open' : ''}`}><div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '0 10px 27px', minWidth: 0 }}><div className="brand-mark"><Landmark size={18} /></div><div style={{ minWidth: 0 }}><strong className="font-display" style={{ fontSize: 14 }}>AICTE</strong><div style={{ color: 'rgba(255,255,255,.5)', fontSize: 9, marginTop: 2 }}>GOVERNANCE PORTAL</div></div><button className="btn btn-ghost icon-btn" style={{ marginLeft: 'auto', color: '#fff', display: 'none' }} onClick={() => setOpen(false)}><X size={17} /></button></div><div className="sidebar-scroll">{primaryLinks.map((item) => <Link href={item.href} key={item.href} className={`nav-link ${current?.href === item.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}><item.icon size={16} strokeWidth={1.8} /><span>{item.label}</span></Link>)}</div><div className="sidebar-footer"><div style={{ padding: '10px 13px', color: 'rgba(255,255,255,.6)', fontSize: 10, lineHeight: 1.5 }}>DEMO MODE<br /><span style={{ color: '#e7d6f7' }}>Local governance state</span></div>{settingsLink && <Link href={settingsLink.href} className={`nav-link ${current?.href === settingsLink.href ? 'active' : ''}`} onClick={() => setOpen(false)} data-testid="link-nav-settings"><Settings size={16} /><span>Settings</span></Link>}<button className="nav-link" onClick={onLogout} data-testid="button-logout"><LogOut size={16} /><span>Sign out</span></button></div></aside>{open && <button className="drawer-backdrop" onClick={() => setOpen(false)} aria-label="Close navigation" />}<main className="main-area"><header className="topbar"><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button className="btn icon-btn mobile-menu" onClick={() => setOpen(true)} data-testid="button-open-navigation"><Menu size={18} /></button><div className="breadcrumb muted" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}><span>Workspace</span><ChevronRight size={13} /><strong style={{ color: 'hsl(var(--foreground))' }}>{current?.label}</strong></div></div><div className="topbar-actions"><button className="btn icon-btn notification-button" onClick={() => setLocation(`${roles[role].base}/notifications`)} aria-label="Open notifications" data-testid="button-header-notifications"><Bell size={17} /></button><div style={{ position: 'relative' }}><button className="btn" style={{ padding: '4px 9px 4px 5px', gap: 8 }} onClick={() => setMenu(!menu)} data-testid="button-user-menu"><span className="brand-mark" style={{ width: 29, height: 29, borderRadius: 10, fontSize: 10, fontWeight: 700 }}>{initials(session.name)}</span><span style={{ textAlign: 'left', display: 'block' }}><strong style={{ display: 'block', fontSize: 11 }}>{session.name}</strong><small className="muted" style={{ fontSize: 9 }}>{roles[role].short}</small></span><ChevronDown size={14} /></button>{menu && <div className="surface" style={{ position: 'absolute', right: 0, top: 48, width: 230, padding: 10, zIndex: 40 }}><p className="eyebrow" style={{ padding: '4px 8px 8px' }}>Signed in workspace</p><div style={{ padding: '2px 8px 10px', fontSize: 12 }}><strong>{roles[role].label}</strong><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 3 }}>Role is assigned to your account.</span></div><button className="btn btn-ghost btn-danger" style={{ width: '100%', justifyContent: 'flex-start', marginTop: 4 }} onClick={onLogout} data-testid="button-menu-logout"><LogOut size={14} /> Sign out</button></div>}</div></div></header><PageContent role={role} path={path} notify={notify} /></main>{toast && <div className="toast-note" data-testid="status-toast"><CheckCircle size={15} style={{ verticalAlign: 'middle', marginRight: 7 }} />{toast}</div>}</div>;
+    return <div className={`app-shell grain ${sidebar.visible ? 'workspace-nav-entering' : 'workspace-nav-hidden'}`}>
+        <aside ref={sidebar.sidebarRef} id="workspace-navigation" className="sidebar" inert={sidebar.visible ? undefined : ''}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '0 10px 27px', minWidth: 0 }}>
+                <div className="brand-mark"><Landmark size={18} /></div>
+                <div style={{ minWidth: 0 }}><strong className="font-display" style={{ fontSize: 14 }}>AICTE</strong><div style={{ color: 'rgba(255,255,255,.5)', fontSize: 9, marginTop: 2 }}>GOVERNANCE PORTAL</div></div>
+            </div>
+            <nav className="sidebar-scroll" aria-label="Workspace">
+                {primaryLinks.map((item, index) => <Link href={item.href} key={item.href} className={`nav-link ${current?.href === item.href ? 'active' : ''}`}
+                    style={{ '--link-order': index }} aria-current={current?.href === item.href ? 'page' : undefined} onClick={sidebar.closeDrawer}
+                    data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}>
+                    <item.icon size={16} strokeWidth={1.8} /><span>{item.label}</span>
+                </Link>)}
+            </nav>
+            <div className="sidebar-footer">
+                <div style={{ padding: '10px 13px', color: 'rgba(255,255,255,.6)', fontSize: 10, lineHeight: 1.5 }}>DEMO MODE<br /><span style={{ color: '#e7d6f7' }}>Local governance state</span></div>
+                {settingsLink && <Link href={settingsLink.href} className={`nav-link ${current?.href === settingsLink.href ? 'active' : ''}`} onClick={sidebar.closeDrawer} data-testid="link-nav-settings"><Settings size={16} /><span>Settings</span></Link>}
+                <button className="nav-link" onClick={onLogout} data-testid="button-logout"><LogOut size={16} /><span>Sign out</span></button>
+            </div>
+        </aside>
+        <div className="workspace-nav-curtain" data-open={sidebar.mobile && sidebar.visible} onClick={sidebar.closeDrawer} aria-hidden="true" />
+        <main className="main-area">
+            <header className="topbar">
+                <div className="workspace-topbar-start">
+                    <WorkspaceMenuButton visible={sidebar.visible} toggle={sidebar.toggle} toggleRef={sidebar.toggleRef} />
+                    <div className="breadcrumb muted"><span>Workspace</span><ChevronRight size={13} /><strong style={{ color: 'hsl(var(--foreground))' }}>{current?.label}</strong></div>
+                </div>
+                <div className="topbar-actions" inert={sidebar.mobile && sidebar.visible ? '' : undefined}><button className="btn icon-btn notification-button" onClick={() => setLocation(`${roles[role].base}/notifications`)} aria-label="Open notifications" data-testid="button-header-notifications"><Bell size={17} /></button><div style={{ position: 'relative' }}><button className="btn" style={{ padding: '4px 9px 4px 5px', gap: 8 }} onClick={() => setMenu(!menu)} data-testid="button-user-menu"><span className="brand-mark" style={{ width: 29, height: 29, borderRadius: 10, fontSize: 10, fontWeight: 700 }}>{initials(session.name)}</span><span style={{ textAlign: 'left', display: 'block' }}><strong style={{ display: 'block', fontSize: 11 }}>{session.name}</strong><small className="muted" style={{ fontSize: 9 }}>{roles[role].short}</small></span><ChevronDown size={14} /></button>{menu && <div className="surface" style={{ position: 'absolute', right: 0, top: 48, width: 230, padding: 10, zIndex: 40 }}><p className="eyebrow" style={{ padding: '4px 8px 8px' }}>Signed in workspace</p><div style={{ padding: '2px 8px 10px', fontSize: 12 }}><strong>{roles[role].label}</strong><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 3 }}>Role is assigned to your account.</span></div><button className="btn btn-ghost btn-danger" style={{ width: '100%', justifyContent: 'flex-start', marginTop: 4 }} onClick={onLogout} data-testid="button-menu-logout"><LogOut size={14} /> Sign out</button></div>}</div></div>
+            </header>
+            <PageContent role={role} path={path} notify={notify} />
+        </main>
+        {toast && <div className="toast-note" data-testid="status-toast"><CheckCircle size={15} style={{ verticalAlign: 'middle', marginRight: 7 }} />{toast}</div>}
+    </div>;
 }
 function PageContent({ role, path, notify }) {
     if (path.endsWith('/dashboard'))
@@ -184,11 +227,9 @@ function PageContent({ role, path, notify }) {
     if (path.endsWith('/settings'))
         return <SettingsPage notify={notify} />;
     if (path === '/reviewer/reviews')
-        return <ReviewQueue notify={notify} />;
-    if (path === '/reviewer/analyzer') {
-        const submissionId = new URLSearchParams(window.location.search).get('submission_id');
-        return submissionId ? <Analyzer notify={notify} submissionId={submissionId} /> : <ReviewerAnalyzerPicker />;
-    }
+        return <ReviewQueue notify={notify} formatDate={formatDocumentDate} />;
+    if (path === '/reviewer/analyzer')
+        return <ReviewerAnalyzerPage notify={notify} formatDate={formatDocumentDate} />;
     if (path === '/reviewer/policies')
         return <PolicyManagement notify={notify} audience="reviewer" />;
     if (path === '/reviewer/history' || path === '/reviewer/approved')
@@ -484,13 +525,6 @@ function AdminReviews({ notify }) {
     const history = decisions.flatMap(row => (row.review_history || []).map((review, index) => ({ ...review, curriculum_name: row.curriculum_name, institute_name: row.institute_name, version: row.version, submission_id: row.submission_id, key: `${row.submission_id}-${review.review_id || index}` }))).sort((a, b) => new Date(b.decided_at || 0) - new Date(a.decided_at || 0));
     return <div className="content"><PageHeader eyebrow="Admin / Oversight" title="Review operations" detail="Current queue and recorded Reviewer decisions." action={<button className="btn" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Refresh</button>} />{error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error}</div>}<div className="stat-grid"><StatCard label="Open queue" value={loading ? '—' : pending.length} note="Pending submissions" icon={Inbox} /><StatCard label="Accepted" value={statuses.Accepted || 0} note="Recorded decisions" icon={CheckCircle2} tone="green" /><StatCard label="Revision required" value={statuses['Revision Required'] || 0} note="Returned to Designers" icon={RefreshCw} /><StatCard label="Rejected" value={statuses.Rejected || 0} note="Preserved review records" icon={CircleAlert} tone="amber" /></div><div style={{ marginTop: 17 }}><SectionCard title="Recent decisions">{loading ? <p className="muted">Loading decisions…</p> : history.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>Curriculum</th><th>Institute</th><th>Reviewer</th><th>Decision</th><th>Date</th><th>Feedback</th></tr></thead><tbody>{history.map(row => <tr key={row.key}><td><strong>{row.curriculum_name}</strong><span className="muted" style={{ display: 'block', fontSize: 10 }}>v{row.version}</span></td><td>{row.institute_name}</td><td>{row.reviewer_name || row.reviewer_id || 'Reviewer'}</td><td><StatusBadge status={row.status} /></td><td>{formatDocumentDate(row.decided_at)}</td><td>{row.feedback || row.decision_justification || 'No additional feedback.'}</td></tr>)}</tbody></table></div> : <p className="muted" style={{ fontSize: 12 }}>No completed decisions have been recorded.</p>}</SectionCard></div></div>;
 }
-function ReviewerAnalyzerPicker() {
-    const [queue, setQueue] = useState([]);
-    const [error, setError] = useState('');
-    const [, setLocation] = useLocation();
-    useEffect(() => { mockService.getPendingSubmissions().then(setQueue).catch(e => setError(e.message || 'Unable to load submissions.')); }, []);
-    return <div className="content"><PageHeader eyebrow="Reviewer / Analysis" title="Choose a submission" detail="Curriculum Analyzer runs only against an officially submitted document version." />{error && <div role="alert" className="surface" style={{ padding: 12 }}>{error}</div>}{queue.length === 0 && !error ? <div className="surface" style={{ padding: 28, textAlign: 'center' }}><Inbox size={26} color="#7758aa" /><h2 className="font-display">No pending submissions</h2><p className="muted" style={{ fontSize: 12 }}>Open a pending item from the Reviewer Queue when one is available.</p></div> : <div style={{ display: 'grid', gap: 10 }}>{queue.map(item => <button key={item.submission_id} className="surface" style={{ padding: 16, textAlign: 'left' }} onClick={() => setLocation(`/reviewer/analyzer?submission_id=${encodeURIComponent(item.submission_id)}`)}><strong>{item.curriculum_name}</strong><p className="muted" style={{ fontSize: 11, margin: '5px 0' }}>{item.institute_name} Â· Version {item.version} Â· {item.submission_id}</p><span className="btn btn-primary"><BarChart3 size={14} /> Analyze submitted version</span></button>)}</div>}</div>;
-}
 function InstituteSubmissionPortal({ notify }) {
     const [curricula, setCurricula] = useState([]);
     const [submissions, setSubmissions] = useState([]);
@@ -596,40 +630,6 @@ function AuditLogs() {
         {error && <div className="surface" role="alert" style={{ padding: 12, marginBottom: 12 }}>{error} <button className="btn" onClick={() => void load()}>Retry</button></div>}
         <div className="surface" style={{ padding: 12, display: 'flex', gap: 9, flexWrap: 'wrap', marginBottom: 14 }}><input className="field" aria-label="Search workflow activity" placeholder="Search people, curriculum, or event" value={query} onChange={event => setQuery(event.target.value)} style={{ flex: '1 1 260px' }} /><select className="select" aria-label="Filter activity type" value={actionFilter} onChange={event => setActionFilter(event.target.value)} style={{ flex: '0 1 230px' }}>{actions.map(action => <option key={action}>{action}</option>)}</select></div>
         {loading ? <div className="surface" style={{ padding: 22 }}>Loading recorded activity…</div> : <SectionCard title={`${shown.length} recorded events`}><div className="table-scroll"><table className="data-table"><thead><tr><th>User</th><th>Institute</th><th>Action</th><th>Curriculum</th><th>Timestamp</th><th>Details</th></tr></thead><tbody>{shown.map(event => <><tr key={event.event_id}><td><strong>{event.actor_name}</strong></td><td>{event.institute_name}</td><td><StatusBadge status={event.action} /></td><td>{event.curriculum_name} <span className="muted">v{event.version}</span></td><td className="muted">{formatDocumentDate(event.created_at)}</td><td><button className="btn btn-ghost" onClick={() => setExpanded(expanded === event.event_id ? '' : event.event_id)} aria-expanded={expanded === event.event_id}><Eye size={14} /> {expanded === event.event_id ? 'Hide' : 'Inspect'}</button></td></tr>{expanded === event.event_id && <tr key={`${event.event_id}-details`}><td colSpan="6"><div className="surface" style={{ padding: 11 }}><p style={{ margin: '0 0 6px' }}>{event.details || 'No additional detail was recorded.'}</p>{event.decision_justification && <p className="muted" style={{ margin: '4px 0' }}><strong>Decision justification:</strong> {event.decision_justification}</p>}<span className="muted" style={{ fontSize: 10 }}>Submission {event.submission_id} · Curriculum ID {event.curriculum_id}</span></div></td></tr>}</>)}</tbody></table>{!shown.length && <p className="muted" style={{ padding: 12 }}>{events.length ? 'No events match these filters.' : 'No submission or review events have been recorded yet.'}</p>}</div></SectionCard>}
-    </div>;
-}
-function ReviewQueue({ notify }) {
-    const [queue, setQueue] = useState([]);
-    const [selectedId, setSelectedId] = useState('');
-    const [detail, setDetail] = useState(null);
-    const [comment, setComment] = useState('');
-    const [justification, setJustification] = useState('');
-    const [documentUrl, setDocumentUrl] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [, setLocation] = useLocation();
-    const load = async () => {
-        setLoading(true); setError('');
-        try { const rows = await mockService.getPendingSubmissions(); setQueue(rows); const id = rows.some(row => row.submission_id === selectedId) ? selectedId : rows[0]?.submission_id || ''; setSelectedId(id); setDetail(id ? await mockService.getSubmission(id) : null); }
-        catch (e) { setError(e.message || 'Could not load the reviewer queue.'); }
-        finally { setLoading(false); }
-    };
-    useEffect(() => { void load(); }, []);
-    const select = async (id) => { setSelectedId(id); setDocumentUrl(''); try { setDetail(await mockService.getSubmission(id)); setError(''); } catch (e) { setError(e.message); } };
-    const decide = async (decision) => {
-        if (!detail) return;
-        try { await mockService.decideSubmission(detail.submission_id, decision, comment, justification); setComment(''); setJustification(''); setDetail(null); await load(); notify(`Decision recorded: ${decision === 'accept' ? 'Accepted' : decision === 'review' ? 'Revision Required' : 'Rejected'}.`); }
-        catch (e) { setError(e.message || 'Decision could not be saved.'); }
-    };
-    const analyzerReport = detail?.analyses?.[0]?.report;
-    const recommendation = analyzerReport?.decision_support?.decision;
-    const overrideRequired = decision => Boolean(recommendation && ({ accept: 'ACCEPT', review: 'REVISE', reject: 'REJECT' }[decision] !== recommendation));
-    return <div className="content"><PageHeader eyebrow="Reviewer / Expert" title="Pending reviews" detail="Database submissions awaiting Reviewer Compliance." action={<button className="btn" onClick={() => void load()}><RefreshCw size={14} /> Refresh queue</button>} />
-        {error && <div className="surface" role="alert" style={{ padding: 13, marginBottom: 13, color: '#8e3c39' }}>{error}</div>}
-        {loading ? <div className="surface" style={{ padding: 28, textAlign: 'center' }}>Loading pending submissionsâ€¦</div> : queue.length === 0 ? <div className="surface" style={{ padding: 32, textAlign: 'center' }}><Inbox size={28} color="#7758aa" /><h2 className="font-display">No pending submissions</h2><p className="muted" style={{ fontSize: 12 }}>New portal uploads will appear here.</p></div> : <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 16 }}>
-            <SectionCard title={`Pending queue Â· ${queue.length}`}><div style={{ display: 'grid', gap: 9 }}>{queue.map(item => <button key={item.submission_id} onClick={() => void select(item.submission_id)} className="surface" style={{ textAlign: 'left', padding: 14, border: selectedId === item.submission_id ? '2px solid #9d7bc7' : undefined }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><strong style={{ fontSize: 12 }}>{item.curriculum_name}</strong><StatusBadge status={item.status} /></div><p className="muted" style={{ fontSize: 10, margin: '6px 0' }}>{item.institute_name} Â· Version {item.version}</p><span className="muted" style={{ fontSize: 10 }}>ID {item.submission_id} Â· {formatDocumentDate(item.submitted_at)}</span></button>)}</div></SectionCard>
-            <SectionCard title="Reviewer Compliance">{detail && <><span className="eyebrow">{detail.submission_id} Â· Version {detail.version}</span><h2 className="font-display" style={{ fontSize: 19, margin: '8px 0' }}>{detail.curriculum_name}</h2><p className="muted" style={{ fontSize: 11 }}>Curriculum {detail.curriculum_id} Â· Submitted {formatDocumentDate(detail.submitted_at)}</p>{detail.previous_versions?.length > 0 && <details className="surface" style={{ padding: 12, margin: '12px 0' }}><summary><strong>Earlier submitted versions</strong></summary>{detail.previous_versions.map(previous => <div key={previous.submission_id} style={{ paddingTop: 10 }}><span>v{previous.version} Â· {previous.status} Â· {formatDocumentDate(previous.submitted_at)}</span>{previous.analyses?.[0]?.report?.overall_score != null && <span> Â· analyzer score {previous.analyses[0].report.overall_score}</span>}</div>)}</details>}<div className="surface" style={{ padding: 12, margin: '14px 0' }}><strong style={{ fontSize: 12 }}>Submitted PDF</strong><div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}><button className="btn" onClick={async () => { try { if (documentUrl) URL.revokeObjectURL(documentUrl); setDocumentUrl(await mockService.getSubmissionDocument(detail.submission_id)); } catch (e) { setError(e.message); } }}><Eye size={14} /> Securely load document</button>{documentUrl && <a className="btn btn-primary" href={documentUrl} target="_blank" rel="noreferrer">Open PDF</a>}</div></div><button className="btn btn-primary" onClick={() => setLocation(`/reviewer/analyzer?submission_id=${encodeURIComponent(detail.submission_id)}`)}><BarChart3 size={14} /> Analyze this submission</button>{analyzerReport?.decision_support && <DecisionRecommendationPanel support={analyzerReport.decision_support} />}<label className="label" style={{ marginTop: 16 }}>Feedback for the institute and designer</label><textarea className="textarea" value={comment} onChange={e => setComment(e.target.value)} placeholder="Required for revision or rejection decisions." />{recommendation && <div style={{ marginTop: 10 }}><label className="label" htmlFor="decision-justification">Decision justification (required when it differs from {recommendation})</label><textarea id="decision-justification" className="textarea" value={justification} onChange={e => setJustification(e.target.value)} placeholder="Explain the reason for your decision." /></div>}<div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 11 }}><button className="btn btn-primary" disabled={!analyzerReport || Boolean(overrideRequired('accept') && !justification.trim())} onClick={() => void decide('accept')}><CheckCircle2 size={14} /> Accept</button><button className="btn" disabled={!comment.trim() || Boolean(overrideRequired('review') && !justification.trim())} onClick={() => void decide('review')}><RefreshCw size={14} /> Request revision</button><button className="btn btn-danger" disabled={!comment.trim() || Boolean(overrideRequired('reject') && !justification.trim())} onClick={() => void decide('reject')}><X size={14} /> Reject</button></div><p className="muted" style={{ fontSize: 10, lineHeight: 1.5 }}>Run the Analyzer before accepting. Revision and rejection require actionable feedback.</p></>}{!detail && <p className="muted">Select a pending submission.</p>}</SectionCard>
-        </div>}
     </div>;
 }
 function ReviewSupportingPage({ path }) {
@@ -833,6 +833,7 @@ function RagAssistantPage({ notify }) {
     });
     const [activeChatId, setActiveChatId] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [activity, setActivity] = useState(null);
     const activeChat = chats.find((chat) => chat.id === activeChatId);
     const messages = activeChat?.messages ?? [];
     const sources = messages.at(-1)?.sources ?? [];
@@ -861,6 +862,7 @@ function RagAssistantPage({ notify }) {
             setActiveChatId(chatId);
         }
         setQuestion('');
+        setActivity({ chatId, requestKey: `${chatId}-${nextMessages.length}`, failed: false });
         setLoading(true);
         try {
             const response = await mockService.askAssistant(text, history);
@@ -871,6 +873,7 @@ function RagAssistantPage({ notify }) {
             } : chat));
         }
         catch (error) {
+            setActivity((current) => ({ ...current, failed: true }));
             notify(`Assistant unavailable: ${error.message}`);
         }
         finally {
@@ -884,7 +887,13 @@ function RagAssistantPage({ notify }) {
                 <div className="rag-conversation" aria-live="polite">
                     {!messages.length && <div className="rag-empty"><Bot size={27} color="#8061ac" /><p>Start a grounded curriculum conversation</p><span>Ask about policies, course structure, outcomes, or assessment using the PDFs indexed by the Admin.</span></div>}
                     {messages.map((message, index) => <div className={`rag-message ${message.role}`} key={`${message.role}-${index}`}><span className="badge badge-slate">{message.role === 'user' ? 'You' : 'AI Assistant'}</span>{message.role === 'assistant' ? <RagAnswer content={message.content} /> : <p>{message.content}</p>}{message.role === 'assistant' && <button className="btn btn-ghost" style={{ padding: 0, minHeight: 0, color: '#7758aa' }} onClick={async () => { try { await navigator.clipboard.writeText(message.content); notify('Response copied to clipboard.'); } catch { notify('Clipboard access is unavailable in this browser.'); } }} data-testid={`button-copy-ai-answer-${index}`}><Check size={14} /> Copy response</button>}</div>)}
-                    {loading && <div className="rag-message assistant"><span className="badge badge-slate">AI Assistant</span><p className="muted">Searching indexed PDF vectors and preparing a grounded answerâ€¦</p></div>}
+                    {activity && <div className="rag-message assistant rag-processing" hidden={activity.chatId !== activeChatId}>
+                        <WorkflowThought key={activity.requestKey} working={loading}
+                            doneLabel={activity.failed ? 'Request ended after' : 'Thought for'}
+                            steps={activity.failed ? [] : loading
+                                ? ['Question sent', 'Waiting for a reply based on indexed PDFs']
+                                : ['Question sent', 'Reply received']} />
+                    </div>}
                 </div>
                 <form onSubmit={ask} style={{ display: 'flex', gap: 8, marginTop: 13 }}>
                     <input className="field" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask a question about the indexed curriculum documents." disabled={loading} data-testid="input-assistant-question" />
@@ -996,316 +1005,6 @@ function ComparisonPage() {
         </>}
     </div>;
 }
-function Analyzer({ notify, submissionId = null }) {
-    const [documents, setDocuments] = useState([]);
-    const [submission, setSubmission] = useState(null);
-    const [selectedKey, setSelectedKey] = useState('');
-    const [report, setReport] = useState(null);
-    const [selectedCriterion, setSelectedCriterion] = useState(null);
-    const [state, setState] = useState('loading');
-    const [error, setError] = useState('');
-
-    const analyze = async (requestedDocument = null, announce = false) => {
-        setState('loading');
-        setError('');
-        setSelectedCriterion(null);
-        try {
-            if (submissionId) {
-                const selected = await mockService.getSubmission(submissionId);
-                setSubmission(selected);
-                const result = await mockService.analyzeSubmission(submissionId);
-                const item = { curriculum_id: selected.curriculum_id, document_id: selected.document_id, filename: `${selected.document_filename} Â· v${selected.version}`, version: selected.version };
-                setDocuments([item]);
-                setSelectedKey(analyzerDocumentKey(item));
-                setReport(result);
-                setState('ready');
-                if (announce) notify('Analysis saved to this submission version.');
-                return;
-            }
-            let available = documents;
-            if (!available.length) {
-                available = submittedCurriculumDocuments(await mockService.getDocuments());
-                setDocuments(available);
-            }
-            const target = requestedDocument
-                || (!selectedKey && requestedAnalyzerDocument(available, window.location.search))
-                || available.find((item) => analyzerDocumentKey(item) === selectedKey)
-                || available[0];
-            if (!target) {
-                setReport(null);
-                setState('empty');
-                return;
-            }
-            setSelectedKey(analyzerDocumentKey(target));
-            const result = await mockService.analyzeCurriculum(target.curriculum_id, target.document_id);
-            setReport(result);
-            setState('ready');
-            if (announce)
-                notify('Curriculum health report recalculated from backend evidence.');
-        }
-        catch (requestError) {
-            setReport(null);
-            setError(requestError.message || 'Unable to analyze this curriculum.');
-            setState({ 404: 'not-found', 409: 'ambiguous', 422: 'invalid-metadata' }[requestError.status] || 'error');
-        }
-    };
-
-    useEffect(() => {
-        void analyze();
-    }, []);
-
-    const selectedDocument = documents.find((item) => analyzerDocumentKey(item) === selectedKey);
-    const criteria = report?.criteria || [];
-    const checkCount = criteria.reduce((total, criterion) => total + (criterion.checks?.length || 0), 0);
-    const aicteReferenceUnavailable = report?.aicte_reference_available === false;
-    const overallScore = aicteReferenceUnavailable ? 'Not Evaluable' : report?.overall_score == null ? 'â€”' : report.overall_score;
-    const partialCurriculum = isPartialCurriculum(report);
-
-    return <div className="content">
-        <PageHeader
-            eyebrow={submissionId ? `Reviewer / Submission ${submission?.submission_id || submissionId}` : 'Reviewer / Curriculum health report'}
-            title="Curriculum analyzer"
-            detail={submission ? `${submission.curriculum_name} Â· version ${submission.version} Â· ${submission.document_filename}` : 'Deterministic evaluation with check-level AICTE and curriculum evidence.'}
-            action={<button className="btn btn-primary" disabled={state === 'loading'} onClick={() => void analyze(null, true)} data-testid="button-recalculate-analyzer"><RefreshCw size={14} /> {state === 'loading' ? 'Analyzing' : 'Recalculate'}</button>}
-        />
-        {submission?.analyses?.length > 0 && <div className="surface" style={{ padding: 12, marginBottom: 14 }}><strong style={{ fontSize: 11 }}>Previous analysis runs for this version: {submission.analyses.length}</strong><span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 4 }}>This new report will be retained alongside earlier runs.</span></div>}
-        {documents.length > 1 && <div className="surface" style={{ padding: 13, marginBottom: 15 }}>
-            <label className="label" htmlFor="analyzer-curriculum">Submitted curriculum</label>
-            <select id="analyzer-curriculum" className="select" value={selectedKey} onChange={(event) => {
-                const next = documents.find((item) => analyzerDocumentKey(item) === event.target.value);
-                if (next)
-                    void analyze(next);
-            }} data-testid="select-analyzer-curriculum">
-                {documents.map((document) => <option value={analyzerDocumentKey(document)} key={analyzerDocumentKey(document)}>{document.filename} Â· {document.curriculum_id}</option>)}
-            </select>
-        </div>}
-        {state === 'loading' && <div className="surface" style={{ padding: 28, textAlign: 'center' }} data-testid="analyzer-loading"><RefreshCw size={22} className="analyzer-spin" /><h2 className="font-display" style={{ fontSize: 17 }}>Analyzing curriculum</h2><p className="muted" style={{ fontSize: 12 }}>Extracting the submitted curriculum and evaluating deterministic checksâ€¦</p></div>}
-        {state === 'empty' && <AnalyzerState title="No submitted curriculum found" detail="Upload a PDF classified as submitted_curriculum with a curriculum_id before running the analyzer." testId="analyzer-empty" />}
-        {state === 'not-found' && <AnalyzerState title="Curriculum not found" detail={error} testId="analyzer-not-found" onRetry={() => void analyze()} />}
-        {state === 'ambiguous' && <AnalyzerState title="Ambiguous curriculum selection" detail={error} testId="analyzer-ambiguous" onRetry={() => void analyze()} />}
-        {state === 'invalid-metadata' && <AnalyzerState title="Invalid curriculum metadata" detail={error} testId="analyzer-invalid-metadata" onRetry={() => void analyze()} />}
-        {state === 'error' && <AnalyzerState title="Analyzer API error" detail={error} testId="analyzer-error" onRetry={() => void analyze()} />}
-        {state === 'ready' && report && <>
-            {report.decision_support && <DecisionRecommendationPanel support={report.decision_support} />}
-            <MandatoryRequirementStatus criteria={criteria} />
-            {submission?.previous_versions?.length > 0 && (() => {
-                const previousAnalysis = submission.previous_versions.find(row => row.analyses?.length)?.analyses?.[0];
-                const previous = previousAnalysis?.report;
-                const oldScore = previous?.overall_score;
-                const delta = oldScore != null && report.overall_score != null ? Number((report.overall_score - oldScore).toFixed(2)) : null;
-                const previousFindings = previousAnalysis?.finding_snapshot || [];
-                const previousOpen = new Set(previousFindings.filter(row => row.status !== 'Resolved').map(row => row.finding_id));
-                const previousResolved = new Set(previousFindings.filter(row => row.status === 'Resolved').map(row => row.finding_id));
-                const currentFindings = new Set((report.decision_support?.reasons || []).map(row => row.finding_id));
-                const resolved = [...previousOpen].filter(id => !currentFindings.has(id)).length;
-                const introduced = [...currentFindings].filter(id => !previousOpen.has(id)).length;
-                const reopened = [...currentFindings].filter(id => previousResolved.has(id)).length;
-                const reasonById = new Map((report.decision_support?.reasons || []).map(row => [row.finding_id, row.title]));
-                const resolvedNames = [...previousOpen].filter(id => !currentFindings.has(id)).map(id => previousFindings.find(row => row.finding_id === id)?.original_issue || id);
-                const introducedNames = [...currentFindings].filter(id => !previousOpen.has(id) && !previousResolved.has(id)).map(id => reasonById.get(id) || id);
-                const reopenedNames = [...currentFindings].filter(id => previousResolved.has(id)).map(id => reasonById.get(id) || id);
-                return <div className="surface" style={{ padding: 13, marginBottom: 14 }} data-testid="submission-version-comparison"><strong>Version comparison</strong><p className="muted" style={{ fontSize: 11 }}>Current v{submission.version}: {report.overall_score ?? 'Not evaluated'} · Previous analyzed version: {oldScore ?? 'No saved analysis'}{delta != null ? ` · Score change ${delta > 0 ? '+' : ''}${delta}` : ''}</p><p style={{ fontSize: 11, marginBottom: 0 }}>Since the previous analyzed version: {resolved} finding(s) no longer flagged · {introduced} newly flagged · {reopened} reopened.</p>{previousAnalysis && <details style={{ marginTop: 8 }}><summary style={{ cursor: 'pointer', fontSize: 11 }}>View finding changes</summary><div style={{ display: 'grid', gap: 6, marginTop: 8 }}>{[["Resolved", resolvedNames], ["Newly flagged", introducedNames], ["Reopened", reopenedNames]].filter(([, names]) => names.length).map(([label, names]) => <p key={label} style={{ fontSize: 10, margin: 0 }}><strong>{label}:</strong> {names.join('; ')}</p>)}</div></details>}</div>;
-            })()}
-            {aicteReferenceUnavailable && <div className="surface analyzer-issues-unavailable" style={{ margin: '0 0 16px' }} data-testid="analyzer-aicte-reference-unavailable"><CircleAlert size={20} /><div><strong>AICTE Reference: Unavailable</strong><span>{report.aicte_reference_message || 'Official AICTE reference documents are not currently available. AICTE-based compliance evaluation cannot be completed.'}</span><span>Curriculum extraction: Available Â· AICTE evidence: Unavailable Â· AICTE-based score: Not Evaluable</span></div></div>}
-            <div className="surface soft-gradient" style={{ padding: 22, marginBottom: 16 }} data-testid="analyzer-summary">
-                <div className="analyzer-summary-grid">
-                    <div>
-                        <p className="eyebrow">Curriculum health report Â· {report.scoring_version}</p>
-                        <h2 className="font-display" style={{ fontSize: 21, margin: '6px 0' }}>{selectedDocument?.filename || report.curriculum_id}</h2>
-                        <span style={{ fontSize: 11 }}>B.Tech CSE Â· {criteria.length} criteria Â· {checkCount} evidence checks</span>
-                        <div className="analyzer-scope" data-testid="analyzer-document-scope">
-                            <span className="eyebrow">Document Scope</span>
-                            <strong>{documentScopeLabel(report.document_scope)}</strong>
-                            <p>{report.scope_reason || 'Document scope explanation is unavailable.'}</p>
-                        </div>
-                    </div>
-                    <div className="analyzer-overall">
-                        <span className="eyebrow">{overallScoreLabel(report)}</span>
-                        <strong className="font-display" style={aicteReferenceUnavailable ? { fontSize: 23, letterSpacing: '-.03em' } : undefined} data-testid="analyzer-overall-score">{report.overall_score == null ? overallScore : `${overallScore}%`}</strong>
-                        <div className="muted" data-testid="analyzer-evaluation-coverage">{aicteReferenceUnavailable ? `Curriculum-only evaluation coverage: ${report.overall_evaluation_coverage}%` : partialCurriculum ? `Based on ${report.overall_evaluation_coverage}% evaluation coverage` : `Evaluation Coverage: ${report.overall_evaluation_coverage}%`}</div>
-                        {(report.low_coverage || hasLowEvaluationCoverage(report.overall_evaluation_coverage)) && <span className="badge badge-amber" style={{ marginTop: 7 }}>Limited evaluation coverage</span>}
-                    </div>
-                </div>
-                {partialCurriculum && <div className="analyzer-scope-warning" data-testid="analyzer-partial-warning"><CircleAlert size={17} /><span><strong>Partial curriculum analyzed.</strong> The score reflects only the criteria that could be evaluated from the submitted document.</span></div>}
-            </div>
-            {report.overall_evaluation_coverage === 0 && <AnalyzerState title="Insufficient evidence" detail="The curriculum was found, but no checks had reliable extracted inputs. Open a criterion to see which checks were excluded." testId="analyzer-insufficient" />}
-            <div className="stat-grid analyzer-score-grid">
-                {criteria.map((criterion) => <AnalyzerScoreTile key={criterion.criterion} criterion={criterion} onClick={() => setSelectedCriterion(criterion)} />)}
-            </div>
-            <AnalyzerIssues report={report} />
-            {submissionId && <div style={{ marginTop: 16 }}><AnalyzerFinalDecision submissionId={submissionId} recommendation={report.decision_support?.decision} notify={notify} /></div>}
-        </>}
-        {selectedCriterion && report && <AnalyzerCriterionModal criterion={selectedCriterion} report={report} onClose={() => setSelectedCriterion(null)} />}
-    </div>;
-}
-
-function AnalyzerState({ title, detail, testId, onRetry }) {
-    return <div className="surface" style={{ padding: 25, textAlign: 'center', marginBottom: 16 }} data-testid={testId}><CircleAlert size={23} color="#8b6a30" /><h2 className="font-display" style={{ fontSize: 17, margin: '10px 0 5px' }}>{title}</h2><p className="muted" style={{ fontSize: 12, margin: '0 auto', maxWidth: 620 }}>{detail}</p>{onRetry && <button className="btn" style={{ marginTop: 14 }} onClick={onRetry}><RefreshCw size={14} /> Retry</button>}</div>;
-}
-
-function AnalyzerIssues({ report }) {
-    if (!report.issues_available)
-        return <div className="surface analyzer-issues-unavailable" data-testid="analyzer-issues-unavailable"><CircleAlert size={18} /><div><strong>{report.aicte_reference_available === false ? 'AICTE-based recommendations are unavailable.' : 'AI recommendations are temporarily unavailable.'}</strong><span>{report.issues_error || 'Your deterministic scores and evidence are still available.'}</span></div></div>;
-    if (!report.issues?.length)
-        return <div className="surface analyzer-no-issues" data-testid="analyzer-no-issues"><CheckCircle2 size={18} /><div><strong>No priority recommendations generated</strong><span>No failed or partial checks were selected for an issue card.</span></div></div>;
-    return <section className="analyzer-issues" data-testid="analyzer-live-issues">
-        <div className="analyzer-issues-heading"><div><p className="eyebrow">Advisory recommendations</p><h2 className="font-display">Priority findings</h2></div><span className="badge badge-lavender">{report.issues.length} generated</span></div>
-        <div style={{ display: 'grid', gap: 12 }}>
-            {report.issues.map((issue) => <AnalyzerIssueCard issue={issue} key={issue.issue_id} />)}
-        </div>
-    </section>;
-}
-
-function AnalyzerIssueCard({ issue }) {
-    const severityTone = {
-        CRITICAL: 'badge-red',
-        HIGH: 'badge-red',
-        MEDIUM: 'badge-amber',
-        LOW: 'badge-lavender',
-    };
-    const evidence = [...(issue.curriculum_evidence || []), ...(issue.aicte_evidence || [])].slice(0, 3);
-    return <article className="surface analyzer-issue-card" data-testid={`analyzer-issue-${issue.issue_id}`}>
-        <div className="analyzer-issue-title">
-            <div><span className={`badge ${severityTone[issue.severity] || 'badge-lavender'}`}>{issue.severity}</span><span className="eyebrow" style={{ marginLeft: 8 }}>Problem</span><h3 className="font-display">{issue.problem}</h3></div>
-            <span className="badge badge-slate">{issue.criterion.replaceAll('_', ' ')}</span>
-        </div>
-        <div className="analyzer-issue-grid">
-            <div><span className="eyebrow">Evidence / related criterion</span>{evidence.length ? evidence.map((item, index) => <div className="analyzer-issue-evidence" key={`${item.source || 'curriculum'}-${item.page_number}-${item.chunk_index}-${index}`}><p>{item.excerpt}</p><small>{item.source || 'Submitted curriculum'} Â· {item.page_number != null ? `Page ${item.page_number}` : 'Page unavailable'} Â· {item.chunk_index != null ? `Chunk ${item.chunk_index}` : 'Chunk unavailable'}</small></div>) : <p>The recommendation is grounded in the related deterministic checks.</p>}<small>{(issue.related_check_ids || []).join(' Â· ')}</small></div>
-            <div><span className="eyebrow">Why it matters</span><p>{issue.why_it_matters}</p></div>
-            <div><span className="eyebrow">Recommended solution</span><p>{issue.recommended_solution}</p></div>
-        </div>
-    </article>;
-}
-
-function AnalyzerScoreTile({ criterion, onClick }) {
-    const score = criterionScoreLabel(criterion);
-    const limited = criterion.low_coverage || hasLowEvaluationCoverage(criterion.evaluation_coverage);
-    return <button className="surface analyzer-score-tile" onClick={onClick} data-testid={`card-analyzer-criterion-${criterion.criterion}`} aria-label={`Open ${criterion.label} score evidence`}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}><span>{criterion.label}</span><strong className={criterion.score == null ? 'analyzer-not-evaluable-score' : ''}>{score}</strong></div>
-        {criterion.score == null ? <div className="analyzer-excluded-bar">Excluded from scoring</div> : <MiniBar value={criterion.score} />}
-        <span className="muted" style={{ display: 'block', fontSize: 10, marginTop: 9 }}>Evaluation coverage: {criterion.evaluation_coverage}%</span>
-        {limited && <span className="badge badge-amber" style={{ marginTop: 7 }}>Limited evidence</span>}
-    </button>;
-}
-
-function displayAnalyzerValue(value) {
-    if (value == null || value === '')
-        return 'Not available';
-    if (typeof value === 'object')
-        return JSON.stringify(value, null, 2);
-    return String(value);
-}
-
-function AnalyzerEvidenceList({ title, evidence, official = false }) {
-    return <div className="analyzer-evidence-group"><span className="eyebrow">{title}</span>{evidence?.length ? evidence.map((item, index) => <div className="analyzer-evidence" key={`${item.source || 'curriculum'}-${item.page_number}-${item.chunk_index}-${index}`}>
-        {official && <strong>{item.source}</strong>}
-        {item.heading && <span>{item.heading}</span>}
-        <p>{item.excerpt}</p>
-        <small>{item.page_number != null ? `Page ${item.page_number}` : 'Page unavailable'} Â· {item.chunk_index != null ? `Chunk ${item.chunk_index}` : 'Chunk unavailable'}</small>
-    </div>) : <p className="muted" style={{ fontSize: 11 }}>No evidence excerpt is available for this check.</p>}</div>;
-}
-
-function DecisionRecommendationPanel({ support }) {
-    if (!support) return null;
-    const title = support.decision === 'INSUFFICIENT_EVIDENCE'
-        ? 'Insufficient Evidence — Manual Review Required'
-        : `Recommended: ${support.decision}`;
-    const badgeClass = support.decision === 'ACCEPT' ? 'badge-green' : support.decision === 'REJECT' ? 'badge-red' : 'badge-amber';
-    return <section className="surface" style={{ padding: 16, margin: '14px 0' }} data-testid="decision-support-panel">
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}><h2 className="font-display" style={{ fontSize: 17, margin: 0 }}>Reviewer decision support</h2><span className={`badge ${badgeClass}`}>{title}</span></div>
-        <p style={{ fontSize: 12, lineHeight: 1.6 }}>{support.summary}</p>
-        <p className="muted" style={{ fontSize: 10 }}>Advisory evidence summary. The Reviewer makes and records the final decision.</p>
-        {support.reasons?.length > 0 ? <div style={{ display: 'grid', gap: 9 }}>{support.reasons.map((reason, index) => <article className="surface" style={{ padding: 11 }} key={`${reason.finding_id}-${index}`}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}><strong style={{ fontSize: 12 }}>{reason.title}</strong><span className="badge badge-amber">{reason.severity}</span><span className="muted" style={{ fontSize: 10 }}>{reason.criterion} · {reason.rule_type}</span></div>
-            <p style={{ fontSize: 11, margin: '7px 0' }}>{reason.explanation}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 9 }}><div><span className="eyebrow">Expected</span><p style={{ fontSize: 11, margin: '4px 0' }}>{displayAnalyzerValue(reason.expected)}</p></div><div><span className="eyebrow">Observed</span><p style={{ fontSize: 11, margin: '4px 0' }}>{displayAnalyzerValue(reason.actual)}</p></div><div><span className="eyebrow">Recommended correction</span><p style={{ fontSize: 11, margin: '4px 0' }}>{reason.recommended_action}</p></div></div>
-            {[...(reason.curriculum_evidence || []).map(row => ({ ...row, kind: 'Curriculum evidence' })), ...(reason.aicte_evidence || []).map(row => ({ ...row, kind: 'AICTE reference' }))].map((row, rowIndex) => <p key={`${row.kind}-${rowIndex}`} className="muted" style={{ fontSize: 10, margin: '7px 0 0' }}><strong>{row.kind}{row.page_number != null ? ` · p. ${row.page_number}` : ''}:</strong> {row.excerpt}</p>)}
-        </article>)}</div> : <p className="muted" style={{ fontSize: 11 }}>No failed or partial findings were returned. Confirm evidence and policy manually.</p>}
-    </section>;
-}
-
-function MandatoryRequirementStatus({ criteria }) {
-    const checks = (criteria || []).flatMap(criterion => (criterion.checks || [])
-        .filter(check => check.rule_type === 'AICTE_MANDATORY')
-        .map(check => ({ ...check, criterion: criterion.criterion })));
-    return <section className="surface" style={{ padding: 15, marginBottom: 14 }} data-testid="mandatory-requirement-status">
-        <h2 className="font-display" style={{ fontSize: 16, margin: '0 0 9px' }}>Configured mandatory criteria</h2>
-        {checks.length ? <div style={{ display: 'grid', gap: 7 }}>{checks.map(check => <div key={check.check_id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}><div><strong style={{ fontSize: 11 }}>{check.title}</strong><span className="muted" style={{ display: 'block', fontSize: 10 }}>{check.criterion}</span></div><StatusBadge status={checkStatusLabel(check.status)} /></div>)}</div> : <p className="muted" style={{ fontSize: 11, margin: 0 }}>No analyzer checks are configured as explicitly mandatory. Confirm applicable policy requirements during manual review.</p>}
-    </section>;
-}
-
-function AnalyzerFinalDecision({ submissionId, recommendation, notify }) {
-    const [feedback, setFeedback] = useState('');
-    const [justification, setJustification] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
-    const [, setLocation] = useLocation();
-    const differs = decision => Boolean(recommendation && ({ accept: 'ACCEPT', review: 'REVISE', reject: 'REJECT' }[decision] !== recommendation));
-    const decide = async decision => {
-        setSaving(true); setError('');
-        try {
-            await mockService.decideSubmission(submissionId, decision, feedback, justification);
-            notify(`Decision recorded: ${decision === 'accept' ? 'Accepted' : decision === 'review' ? 'Revision requested' : 'Rejected'}.`);
-            setLocation('/reviewer/reviews');
-        } catch (e) { setError(e.message || 'Decision could not be saved.'); }
-        finally { setSaving(false); }
-    };
-    return <SectionCard title="Final Reviewer decision">
-        {error && <div className="surface" role="alert" style={{ padding: 10, marginBottom: 10 }}>{error}</div>}
-        <label className="label" htmlFor="analyzer-final-feedback">Reviewer feedback</label><textarea id="analyzer-final-feedback" className="textarea" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Required for a revision request or rejection." />
-        {recommendation && <><label className="label" htmlFor="analyzer-final-justification" style={{ marginTop: 10 }}>Justification when your decision differs from {recommendation}</label><textarea id="analyzer-final-justification" className="textarea" value={justification} onChange={e => setJustification(e.target.value)} placeholder="Explain why you are overriding the advisory recommendation." /></>}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 11 }}>
-            <button className="btn btn-primary" disabled={saving || Boolean(differs('accept') && !justification.trim())} onClick={() => void decide('accept')}><CheckCircle2 size={14} /> Accept</button>
-            <button className="btn" disabled={saving || !feedback.trim() || Boolean(differs('review') && !justification.trim())} onClick={() => void decide('review')}><RefreshCw size={14} /> Request revision</button>
-            <button className="btn btn-danger" disabled={saving || !feedback.trim() || Boolean(differs('reject') && !justification.trim())} onClick={() => void decide('reject')}><X size={14} /> Reject</button>
-        </div>
-    </SectionCard>;
-}
-
-function AnalyzerCriterionModal({ criterion, report, onClose }) {
-    const score = criterionScoreLabel(criterion);
-    const statusTone = { pass: 'badge-green', partial: 'badge-amber', fail: 'badge-red', not_evaluable: 'badge-slate' };
-    return <Modal title={`${criterion.label.toUpperCase()} â€” ${score}`} onClose={onClose} wide>
-        <div className="analyzer-modal-summary">
-            <div><span className="eyebrow">Evaluated score (quality)</span><strong>{criterionCalculation(criterion)}</strong></div>
-            <div><span className="eyebrow">Evaluation coverage (evidence completeness)</span><strong>{coverageCalculation(criterion)}</strong></div>
-        </div>
-        <p className="muted" style={{ fontSize: 11, lineHeight: 1.55, margin: '-3px 0 14px' }} data-testid="analyzer-score-coverage-explanation">Required checks receive zero marks when reliable evidence is missing. Scope-dependent checks are excluded when they fall outside the submitted document, and evaluation coverage shows how much could be evaluated.</p>
-        {(criterion.low_coverage || hasLowEvaluationCoverage(criterion.evaluation_coverage)) && <div className="analyzer-limited-note"><CircleAlert size={15} /><span><strong>Limited evidence.</strong> Fewer than half of this criterionâ€™s possible check marks were evaluable.</span></div>}
-        <div className="analyzer-check-list">
-            {(criterion.checks || []).map((check) => <section className={`analyzer-check analyzer-check-${check.status}`} key={check.check_id} data-testid={`analyzer-check-${check.check_id}`}>
-                <div className="analyzer-check-heading">
-                    <div><span className={`badge ${statusTone[check.status]}`}>{checkStatusLabel(check.status)}</span><span className={`badge ${check.availability_policy === 'required' ? 'badge-red' : 'badge-lavender'}`} style={{ marginLeft: 6 }}>{check.availability_policy === 'required' ? 'REQUIRED' : 'SCOPE DEPENDENT'}</span><h3 className="font-display">{check.title}</h3></div>
-                    <strong>{check.status === 'not_evaluable' ? 'Excluded from score' : `${check.obtained_marks} / ${check.maximum_marks}`}</strong>
-                </div>
-                <span className="badge badge-lavender">{check.rule_type.replaceAll('_', ' ')}</span>
-                <p className="muted" style={{ fontSize: 10, margin: '7px 0 0' }}>{check.availability_policy === 'required' ? 'Missing reliable evidence for this check receives zero marks.' : 'This check may be excluded when it is outside the submitted document scope.'}</p>
-                <div className="analyzer-check-marks">
-                    <div><span className="eyebrow">Obtained marks</span><strong>{check.status === 'not_evaluable' ? 'Not scored' : check.obtained_marks}</strong></div>
-                    <div><span className="eyebrow">Maximum marks</span><strong>{check.maximum_marks}</strong></div>
-                </div>
-                <div className="analyzer-expected-grid">
-                    <div><span className="eyebrow">Expected</span><pre>{displayAnalyzerValue(check.expected)}</pre></div>
-                    <div><span className="eyebrow">Actual curriculum value</span><pre>{displayAnalyzerValue(check.actual)}</pre></div>
-                </div>
-                <div className="analyzer-reason"><span className="eyebrow">Deduction reason</span><p>{check.deduction_reason}</p></div>
-                {check.status === 'not_evaluable' && <div className="analyzer-not-evaluable-note" data-testid={`analyzer-not-evaluable-${check.check_id}`}><strong>This check was excluded from scoring because sufficient evidence was not available.</strong><span>It was excluded from both obtained and maximum evaluable marks; it is not a failure.</span>{isPartialScopeExclusion(report, check) && <span>Not evaluated because the submitted document does not represent the complete B.Tech CSE programme.</span>}</div>}
-                <div className="analyzer-evidence-grid">
-                    <AnalyzerEvidenceList title="AICTE Evidence" evidence={check.aicte_evidence} official />
-                    <AnalyzerEvidenceList title="Curriculum Evidence" evidence={check.curriculum_evidence} />
-                </div>
-            </section>)}
-        </div>
-        <div className="surface inset-surface analyzer-modal-total" data-testid="analyzer-modal-calculation">
-            <div><span>Obtained evaluable marks</span><strong>{criterion.obtained_marks}</strong></div>
-            <div><span>Evaluable maximum marks</span><strong>{criterion.evaluable_maximum_marks}</strong></div>
-            <div><span>Total possible marks</span><strong>{criterion.configured_maximum_marks}</strong></div>
-            <p><strong>Criterion score:</strong> {criterionCalculation(criterion)}</p>
-            <p><strong>Evaluation coverage:</strong> {coverageCalculation(criterion)}</p>
-        </div>
-    </Modal>;
-}
-
 function DesignerChanges({ notify, reviewer = false }) {
     const [requests, setRequests] = useState([]);
     const [statusFilter, setStatusFilter] = useState('All');
